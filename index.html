@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>try { const t = localStorage.getItem('vg-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <style>
 /* Layout: drafting-table app. Tool rail on the left, a pannable drawing board on the right; stacks on phones. */
 :root {
@@ -42,6 +43,12 @@
   --accent: #7D9CFF; --accent-ink: #0E1320; --stage: #0B0E12; --stage-dot: #1C232C;
   --paper-shadow: rgba(0, 0, 0, 0.55); color-scheme: dark;
 }
+/* Palette from wasteddesigner.com: near-black, warm off-white, lime accent */
+:root[data-theme="wasteddesigner"] {
+  --bg: #060606; --panel: #181818; --ink: #EAE7DF; --muted: #92978D; --rule: #2C2C29;
+  --accent: #DCFF66; --accent-ink: #060606; --stage: #0D0D0D; --stage-dot: #232321;
+  --paper-shadow: rgba(0, 0, 0, 0.6); color-scheme: dark;
+}
 html, body { height: 100%; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px;
@@ -60,6 +67,7 @@ body {
 .word { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
 .tag { color: var(--muted); font-size: 13px; }
 .exports { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.exports select { width: auto; margin-right: 6px; }
 .exports .lbl { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
 .btn {
   font: 600 13px/1 var(--font-body); padding: 9px 14px; border-radius: 8px; cursor: pointer;
@@ -152,6 +160,12 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
       <span class="tag">Perspective grids for drawing, painting and concept art</span>
     </div>
     <div class="exports">
+      <select id="theme" aria-label="Colour scheme">
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="wasteddesigner">WastedDesigner</option>
+      </select>
       <span class="lbl">Download</span>
       <button class="btn primary" id="exPng" type="button">PNG</button>
       <button class="btn" id="exSvg" type="button">SVG</button>
@@ -920,6 +934,13 @@ readTokens();
 const mq = window.matchMedia('(prefers-color-scheme: dark)');
 (mq.addEventListener ? mq.addEventListener('change', () => { readTokens(); draw(); }) : null);
 new MutationObserver(() => { readTokens(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+const themeSel = $('#theme');
+themeSel.value = document.documentElement.dataset.theme || 'system';
+themeSel.addEventListener('change', () => {
+  const t = themeSel.value, root = document.documentElement;
+  if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
+  try { t === 'system' ? localStorage.removeItem('vg-theme') : localStorage.setItem('vg-theme', t); } catch (e) {}
+});
 syncInputs();
 let first = true;
 new ResizeObserver(() => { resize(); if (first && cssW) { first = false; fitAll(); } }).observe(cv);
