@@ -142,6 +142,8 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
 .seg label:has(input:checked) { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px var(--paper-shadow); }
 .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btns .btn { padding: 8px 12px; }
 .hint { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font: 500 12px var(--font-body); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
@@ -203,6 +205,7 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
         <option value="dark">Dark</option>
         <option value="wasteddesigner">WastedDesigner</option>
       </select>
+      <button class="btn" id="share" type="button">Copy link</button>
       <span class="lbl">Download</span>
       <button class="btn primary" id="exPng" type="button">PNG</button>
       <button class="btn" id="exSvg" type="button">SVG</button>
@@ -328,6 +331,33 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
       </section>
 
       <section class="sec">
+        <h2>Boxes</h2>
+        <div class="btns" data-modes="1,2,3,6">
+          <button class="btn" id="boxAdd" type="button">Add box</button>
+          <button class="btn" id="boxDel" type="button">Remove selected</button>
+          <button class="btn" id="boxClear" type="button">Clear all</button>
+        </div>
+        <p class="hint" data-modes="1,2,3,6">Drag a box to move it, and its square handles to change width, depth and height. Boxes follow the vanishing points when you move them. Delete removes the selected box.</p>
+        <p class="hint" data-modes="4,5">Boxes work in 1, 2 and 3-point and isometric grids.</p>
+      </section>
+
+      <section class="sec">
+        <h2>Reference image</h2>
+        <div class="btns">
+          <button class="btn" id="refAdd" type="button">Add image</button>
+          <button class="btn" id="refMatch" type="button" data-ref>Match page to image</button>
+          <button class="btn" id="refRemove" type="button" data-ref>Remove</button>
+        </div>
+        <input type="file" id="refFile" accept="image/*" hidden>
+        <div class="row" data-ref>
+          <label for="refOpacity">Image opacity</label><output data-for="refOpacity"></output>
+          <input type="range" id="refOpacity" data-bind="refOpacity" data-pct min="5" max="100" step="5">
+        </div>
+        <label class="check" data-ref><input type="checkbox" id="refExport" data-bind="refExport">Include the image in downloads</label>
+        <p class="hint">Put a photo or sketch under the grid, then line the vanishing points up with its edges. You can also drop an image onto the board.</p>
+      </section>
+
+      <section class="sec">
         <h2>Guides</h2>
         <label class="check" data-modes="1,2,3,4,5"><input type="checkbox" id="showHorizon" data-bind="showHorizon">Horizon line</label>
         <label class="check" data-modes="5"><input type="checkbox" id="showRim" data-bind="showRim">Fisheye circle outline</label>
@@ -403,7 +433,8 @@ const DEF = {
   palette: 'tri', c1: '#2B57CC', c2: '#D2416E', c3: '#2E9A6A', cH: '#1B2430',
   bg: 'white', showHorizon: true, showMarks: true, showCone: false, name: 'perspective-grid',
   fx: 0.5, fr: 1.15, curves: 14, showRim: true, f4w: 1.3, f4h: 1.7,
-  cells: 24, isoAngle: 30, isoVert: true
+  cells: 24, isoAngle: 30, isoVert: true,
+  refOpacity: 0.5, refExport: false, boxes: []
 };
 const PALETTES = {
   tri:      { label: 'Tri-colour',      c1: '#2B57CC', c2: '#D2416E', c3: '#2E9A6A', cH: '#1B2430' },
@@ -416,17 +447,54 @@ const PRINT = { a5: [148, 210], a4: [210, 297], a3: [297, 420], letter: [215.9, 
 const SCREEN = { hd: [1920, 1080], qhd: [2560, 1440], uhd: [3840, 2160], ipad: [2732, 2048], square: [2048, 2048] };
 const NAMES = { a5: 'A5', a4: 'A4', a3: 'A3', letter: 'Letter', tabloid: 'Tabloid', hd: 'Full HD', qhd: 'QHD', uhd: '4K', ipad: 'iPad Pro', square: 'Square', custom: 'Custom' };
 
+const ENUMS = {
+  mode: [1, 2, 3, 4, 5, 6], preset: [...Object.keys(PRINT), ...Object.keys(SCREEN), 'custom'], orient: ['landscape', 'portrait'],
+  bg: Object.keys(BG), palette: [...Object.keys(PALETTES), 'custom'], isoAngle: [30, 26.565], dpi: [150, 300, 600]
+};
+const RANGES = {
+  rays: [4, 120], verticals: [0, 80], horizontals: [0, 60], curves: [2, 60], cells: [4, 120], weight: [0.5, 12],
+  opacity: [0.1, 1], accent: [0, 12], cw: [64, 12000], ch: [64, 12000], hz: [-1, 2], fx: [-1, 2], fr: [0.1, 6],
+  f4w: [0.1, 8], f4h: [0.1, 8], vp0: [-4, 5], vp1: [-4, 5], vp2: [-4, 5], vp3x: [-4, 5], vp3y: [-4, 5], refOpacity: [0.05, 1]
+};
+// Settings arrive from localStorage or from a shared link, so keep only known keys holding sensible values.
+function clean(s) {
+  const o = Object.assign({}, DEF, { boxes: [] });
+  if (!s || typeof s !== 'object') return o;
+  for (const k in DEF) {
+    let v = s[k];
+    if (k === 'boxes' || v === undefined || typeof v !== typeof DEF[k]) continue;
+    if (typeof v === 'number') { if (!isFinite(v)) continue; if (RANGES[k]) v = clamp(v, ...RANGES[k]); }
+    if (ENUMS[k] && !ENUMS[k].includes(v)) continue;
+    if (/^c[123H]$/.test(k) && !/^#[0-9a-f]{6}$/i.test(v)) continue;
+    o[k] = typeof v === 'string' ? v.slice(0, 80) : v;
+  }
+  if (Array.isArray(s.boxes)) o.boxes = s.boxes.slice(0, 50)
+    .filter(b => b && ['x', 'y', 'w', 'd', 'h'].every(k => typeof b[k] === 'number' && isFinite(b[k])))
+    .map(b => ({ x: clamp(b.x, -2, 3), y: clamp(b.y, -2, 3), w: clamp(b.w, 0.005, 20), d: clamp(b.d, 0.005, 20), h: clamp(b.h, 0.005, 20) }));
+  return o;
+}
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 let st = load();
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return Object.assign({}, DEF, s); } catch (e) {}
-  return Object.assign({}, DEF);
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return clean(s); } catch (e) {}
+  return clean();
 }
+// A shared link carries the settings that differ from the defaults, as base64url JSON after #g=
+const b64 = s => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64 = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
+let bootMsg = '';
+const shared = location.hash.match(/^#g=([\w-]+)$/);
+if (shared) {
+  try { st = clean(JSON.parse(unb64(shared[1]))); bootMsg = 'Opened a shared grid'; } catch (e) { bootMsg = 'That link could not be read'; }
+  history.replaceState(null, '', location.pathname + location.search);
+}
+// a link pasted into an open tab only changes the hash, which does not reload the page
+addEventListener('hashchange', () => { if (/^#g=/.test(location.hash)) location.reload(); });
 let saveT;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }, 250); }
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 /* ---------- Page size ---------- */
 function size() {
@@ -573,7 +641,71 @@ function buildFish(W, H, clip, L, accentOn, w, a, poly) {
   }
 }
 
+/* ---------- Boxes ---------- */
+// A box is stored as its nearest bottom corner (fractions of the page) plus three edge lengths (fractions of page
+// height, measured at that corner). The corner sits on the picture plane and the edges are rebuilt from a camera
+// derived from the vanishing points, so a box stays in true perspective when the points move.
+const norm = v => { const l = Math.hypot(...v); return v.map(c => c / l); };
+function camera(W, H) {
+  if (st.mode === 4 || st.mode === 5) return null;
+  if (st.mode === 6) {
+    const t = st.isoAngle * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    return { iso: true, ax: [[c, -s, 0], [-c, -s, 0], [0, -1, 0]] };
+  }
+  const hy = st.hz * H;
+  // 1-point has no constraint on viewing distance; 0.7 page widths matches the default 2-point view
+  if (st.mode === 1) return { o: [st.vp0 * W, hy], d: 0.7 * W, ax: [[1, 0, 0], [0, 0, 1], [0, -1, 0]] };
+  const c = cone(W, H); if (!c) return null;
+  const V = vps(W, H), toward = v => norm([v.x - c.cx, v.y - c.cy, c.d]);
+  const ax = [toward(V[0]), toward(V[1])];
+  // 3-point: up runs away from VP3 when it sits below the horizon (looking down), toward it when above
+  ax.push(st.mode === 3 ? toward(V[2]).map(k => V[2].y > hy ? -k : k) : [0, -1, 0]);
+  return { o: [c.cx, c.cy], d: c.d, ax };
+}
+function boxCorners(cam, b, W, H) {
+  const A = [b.x * W, b.y * H], len = [b.w * H, b.d * H, b.h * H];
+  const P0 = cam.iso ? [A[0], A[1], 0] : [A[0] - cam.o[0], A[1] - cam.o[1], cam.d];
+  const pts = [];
+  // corner i: bit 0 = along width, bit 1 = along depth, bit 2 = up
+  for (let i = 0; i < 8; i++) {
+    const P = P0.slice();
+    for (let k = 0; k < 3; k++) if (i >> k & 1) for (let j = 0; j < 3; j++) P[j] += cam.ax[k][j] * len[k];
+    if (cam.iso) pts.push([P[0], P[1]]);
+    else pts.push(P[2] > cam.d * 0.02 ? [cam.o[0] + cam.d * P[0] / P[2], cam.o[1] + cam.d * P[1] / P[2]] : null);   // null: behind the eye
+  }
+  return pts;
+}
+const BOX_EDGES = [];
+for (let i = 0; i < 8; i++) for (let k = 0; k < 3; k++) if (!(i >> k & 1)) BOX_EDGES.push([i, i | 1 << k]);
+// Length along one box axis that puts that edge's far corner at screen point (x, y)
+function edgeLen(cam, b, axis, W, H, x, y) {
+  const A = [b.x * W, b.y * H], e = cam.ax[axis];
+  if (cam.iso) return (x - A[0]) * e[0] + (y - A[1]) * e[1];
+  const P = [A[0] - cam.o[0], A[1] - cam.o[1], cam.d], S = [x, y];
+  // the far corner moves along a screen line; solve on whichever axis that line moves along more
+  const j = Math.abs(e[0] * cam.d - P[0] * e[2]) > Math.abs(e[1] * cam.d - P[1] * e[2]) ? 0 : 1;
+  const q = (S[j] - cam.o[j]) / cam.d, den = q * e[2] - e[j];
+  return Math.abs(den) < 1e-9 ? NaN : (P[j] - q * cam.d) / den;
+}
+function inHull(P, x, y) {
+  P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of P.reverse()) { while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  const h = lo.slice(0, -1).concat(up.slice(0, -1));
+  return h.length > 2 && h.every((p, i) => cr(p, h[(i + 1) % h.length], [x, y]) >= 0);
+}
+
 function build(W, H, clip) {
+  const out = buildGrid(W, H, clip), cam = camera(W, H);
+  if (cam) for (const b of st.boxes) {
+    const p = boxCorners(cam, b, W, H);
+    for (const [i, j] of BOX_EDGES) if (p[i] && p[j]) { const s = clipSeg(...p[i], ...p[j], clip); if (s) out.push({ s, c: st.cH, w: st.weight * 1.4, a: 1 }); }
+  }
+  return out;
+}
+function buildGrid(W, H, clip) {
   const out = [];
   const w = +st.weight, a = +st.opacity, hy = st.hz * H, V = vps(W, H);
   const L = (x1, y1, x2, y2, c, lw, al) => { const s = clipSeg(x1, y1, x2, y2, clip); if (s) out.push({ s, c, w: lw, a: al }); };
@@ -646,6 +778,15 @@ function drawPrims(ctx, P, minW, alphaMul) {
   ctx.globalAlpha = 1;
 }
 
+/* ---------- Reference image ---------- */
+// Held as a downscaled JPEG, kept in localStorage when it fits, and never put in a shared link.
+const REF_KEY = 'vg-ref';
+let ref = null;   // { src, w, h, img }; w and h are the original image's size
+const refRect = (W, H) => { const k = Math.min(W / ref.w, H / ref.h); return [(W - ref.w * k) / 2, (H - ref.h * k) / 2, ref.w * k, ref.h * k]; };
+function drawRef(g, W, H, alphaMul) { if (!ref) return; g.globalAlpha = st.refOpacity * alphaMul; g.drawImage(ref.img, ...refRect(W, H)); g.globalAlpha = 1; }
+
+let sel = null;   // index of the selected box
+
 /* ---------- Board (preview) ---------- */
 const cv = $('#board'), ctx = cv.getContext('2d');
 let view = { s: 0.1, cx: 0, cy: 0 }, cssW = 0, cssH = 0, dpr = 1, tokens = {};
@@ -714,6 +855,7 @@ function render() {
   else ctx.fillRect(0, 0, W, H);
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+  drawRef(ctx, W, H, 1);
   drawPrims(ctx, build(W, H, paper), minW, 1);
   ctx.restore();
 
@@ -732,6 +874,18 @@ function render() {
     ctx.fillStyle = tokens['--panel']; ctx.globalAlpha = .92; ctx.fillRect(lx, h.sy - 9, tw + 10, 18); ctx.globalAlpha = 1;
     ctx.fillStyle = tokens['--ink']; ctx.fillText(label, lx + 5, h.sy);
   }
+  // selected box: accent outline and square handles for width, depth and height
+  const cam = st.boxes[sel] && camera(W, H);
+  if (cam) {
+    const p = boxCorners(cam, st.boxes[sel], W, H).map(q => q && toScreen(...q));
+    ctx.strokeStyle = tokens['--accent']; ctx.lineWidth = 2; ctx.beginPath();
+    for (const [i, j] of BOX_EDGES) if (p[i] && p[j]) { ctx.moveTo(...p[i]); ctx.lineTo(...p[j]); }
+    ctx.stroke();
+    for (const i of [1, 2, 4]) if (p[i]) {
+      ctx.fillStyle = tokens['--accent']; ctx.fillRect(p[i][0] - 6, p[i][1] - 6, 12, 12);
+      ctx.lineWidth = 2; ctx.strokeStyle = tokens['--panel']; ctx.strokeRect(p[i][0] - 6, p[i][1] - 6, 12, 12);
+    }
+  }
   updateReadout(W, H);
 }
 
@@ -741,6 +895,8 @@ function updateReadout(W, H) {
   const parts = [];
   parts.push(`<span><b>${NAMES[st.preset]}</b> ${W.toLocaleString()} × ${H.toLocaleString()} px${mm ? ` · ${st.dpi} dpi` : ''}</span>`);
   const len = px => mm ? `${(px / st.dpi * 25.4).toFixed(1)} mm` : `${Math.round(px).toLocaleString()} px`;
+  const b = st.boxes[sel];
+  if (b && camera(W, H)) parts.push(`<span>Box <b>${len(b.w * H)} × ${len(b.d * H)} × ${len(b.h * H)}</b> at its near corner</span>`);
   if (st.mode === 6) {
     const { s, v } = isoStep(W);
     parts.push(`<span>Cell <b>${len(s)}</b> wide · <b>${len(v)}</b> tall</span>`);
@@ -770,17 +926,38 @@ function updateReadout(W, H) {
 /* ---------- Pointer interaction ---------- */
 let drag = null;
 function pt(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+// Box hits: 'bh0'..'bh2' for the selected box's width, depth and height handles, 'bb<n>' for box n's body
+function hitBox(sx, sy, W, H) {
+  const cam = camera(W, H); if (!cam) return null;
+  if (st.boxes[sel]) {
+    const p = boxCorners(cam, st.boxes[sel], W, H);
+    for (const [k, i] of [[0, 1], [1, 2], [2, 4]]) if (p[i]) { const [hx, hy] = toScreen(...p[i]); if (Math.hypot(hx - sx, hy - sy) < 14) return 'bh' + k; }
+  }
+  for (let n = st.boxes.length - 1; n >= 0; n--) {
+    const p = boxCorners(cam, st.boxes[n], W, H).filter(Boolean).map(q => toScreen(...q));
+    if (p.length === 8 && inHull(p, sx, sy)) return 'bb' + n;
+  }
+  return null;
+}
 function hit(sx, sy) {
   const { W, H } = size();
+  const box = hitBox(sx, sy, W, H);
+  if (box && box.startsWith('bh')) return box;
   let best = null, bd = 18;
   for (const h of handlePositions(W, H)) { const d = Math.hypot(h.sx - sx, h.sy - sy); if (d < bd) { bd = d; best = h.k; } }
   if (best) return best;
+  if (box) return box;
   if (st.mode !== 6 && Math.abs(toScreen(0, st.hz * H)[1] - sy) < 8) return 'hz';
   return null;
 }
 cv.addEventListener('pointerdown', e => {
   const [sx, sy] = pt(e); const k = hit(sx, sy);
+  const { W, H } = size(), [px, py] = toPaper(sx, sy);
   drag = { key: k || 'pan', lx: sx, ly: sy };
+  if (!k) sel = null;
+  else if (k.startsWith('bb')) { sel = +k.slice(2); const b = st.boxes[sel]; Object.assign(drag, { key: 'box', ox: px - b.x * W, oy: py - b.y * H }); }
+  else if (k.startsWith('bh')) Object.assign(drag, { key: 'bh', axis: +k[2] });
+  syncBoxes();
   cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); draw();
 });
 cv.addEventListener('pointermove', e => {
@@ -793,6 +970,12 @@ cv.addEventListener('pointermove', e => {
     case 'hz': st.hz = clamp(ny, -1, 2); break;
     case 'vp0': case 'vp1': case 'vp2': st[drag.key] = nx; st.hz = clamp(ny, -1, 2); break;
     case 'vp3': st.vp3x = nx; st.vp3y = ny; break;
+    case 'box': { const b = st.boxes[sel]; b.x = clamp((px - drag.ox) / W, -2, 3); b.y = clamp((py - drag.oy) / H, -2, 3); break; }
+    case 'bh': {
+      const cam = camera(W, H), b = st.boxes[sel], t = cam ? edgeLen(cam, b, drag.axis, W, H, px, py) : NaN;
+      if (t > 0) b['wdh'[drag.axis]] = clamp(t / H, 0.005, 20);   // past the vanishing point t turns negative: keep the last size
+      break;
+    }
     case 'fc': st.fx = clamp(nx, -1, 2); st.hz = clamp(ny, -1, 2); break;
     case 'fN': case 'fS': case 'fE': case 'fW': {
       const f = fish(W, H), horiz = drag.key === 'fE' || drag.key === 'fW';
@@ -823,7 +1006,8 @@ const fmt = {
   weight: v => (+v).toFixed(1) + ' px', accent: v => (+v ? 'every ' + v + ' lines' : 'off'),
   rays: v => v, verticals: v => (+v ? v : 'off'), horizontals: v => (+v ? v : 'off'),
   fr: v => Math.round(v * 100) + '%', curves: v => v, cells: v => v,
-  f4w: v => Math.round(v * 100) + '% of width', f4h: v => Math.round(v * 100) + '% of height'
+  f4w: v => Math.round(v * 100) + '% of width', f4h: v => Math.round(v * 100) + '% of height',
+  refOpacity: v => Math.round(v * 100) + '%'
 };
 function syncInputs(onlyPositions) {
   $$('[data-bind]').forEach(el => {
@@ -842,6 +1026,9 @@ function syncInputs(onlyPositions) {
   $$('[data-modes]').forEach(el => el.hidden = !el.dataset.modes.split(',').includes(String(st.mode)));
   $$('[data-print]').forEach(el => el.hidden = !PRINT[st.preset]);
   $$('[data-custom]').forEach(el => el.hidden = st.preset !== 'custom');
+  $$('[data-ref]').forEach(el => el.hidden = !ref);
+  $('#refAdd').textContent = ref ? 'Replace image' : 'Add image';
+  syncBoxes();
   const labs = { 1: ['Rays', 'Horizontals', 'Verticals'], 2: ['VP1', 'VP2', 'Verticals'], 3: ['VP1', 'VP2', 'VP3'], 4: ['', 'Horizontals', 'Verticals'], 5: ['Centre', 'Horizontals', 'Verticals'], 6: ['Rising', 'Falling', 'Verticals'] }[st.mode];
   ['c1', 'c2', 'c3'].forEach((k, i) => $('#lab-' + k).textContent = labs[i]);
   $('#c2').closest('label').hidden = st.mode === 1 && !st.horizontals;
@@ -891,7 +1078,71 @@ for (const [k, p] of Object.entries(PALETTES)) {
   b.onclick = () => { applyPalette(k); save(); syncInputs(); draw(); };
   pal.appendChild(b);
 }
-$('#reset').onclick = () => { st = Object.assign({}, DEF); save(); syncInputs(); fitAll(); toast('Settings reset'); };
+$('#reset').onclick = () => { st = clean(); sel = null; save(); syncInputs(); fitAll(); toast('Settings reset'); };
+
+/* ---------- Box controls ---------- */
+function syncBoxes() {
+  if (!st.boxes[sel]) sel = null;
+  $('#boxDel').disabled = sel === null; $('#boxClear').disabled = !st.boxes.length;
+}
+function removeBox() { if (sel === null) return; st.boxes.splice(sel, 1); sel = null; save(); syncBoxes(); draw(); }
+$('#boxAdd').onclick = () => {
+  // a new box stands a little below the horizon, near the middle of the page (beside the point in 1-point, so its depth shows)
+  st.boxes.push({ x: st.mode === 1 ? clamp(st.vp0 + 0.12, 0.05, 0.8) : 0.5, y: st.mode === 6 ? 0.62 : clamp(st.hz + 0.25, 0.15, 0.9), w: 0.18, d: 0.18, h: 0.24 });
+  sel = st.boxes.length - 1; save(); syncBoxes(); draw();
+};
+$('#boxDel').onclick = removeBox;
+$('#boxClear').onclick = () => { st.boxes = []; sel = null; save(); syncBoxes(); draw(); };
+document.addEventListener('keydown', e => {
+  if (sel === null || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeBox(); }
+  else if (e.key === 'Escape') { sel = null; syncBoxes(); draw(); }
+});
+
+/* ---------- Reference image controls ---------- */
+function useRef(r, persist) {
+  const img = new Image();
+  img.onload = () => {
+    ref = { ...r, img };
+    if (persist) { try { localStorage.setItem(REF_KEY, JSON.stringify(r)); } catch (e) { toast('Image added. It is too large to keep after you close the page.'); } }
+    syncInputs(); draw();
+  };
+  img.src = r.src;
+}
+function loadRefFile(file) {
+  if (!file || !/^image\//.test(file.type)) { toast('Choose an image file'); return; }
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const g = c.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    useRef({ src: c.toDataURL('image/jpeg', 0.85), w: img.naturalWidth, h: img.naturalHeight }, true);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('That image could not be opened'); };
+  img.src = url;
+}
+$('#refAdd').onclick = () => $('#refFile').click();
+$('#refFile').onchange = e => { loadRefFile(e.target.files[0]); e.target.value = ''; };
+$('#refRemove').onclick = () => { ref = null; try { localStorage.removeItem(REF_KEY); } catch (e) {} syncInputs(); draw(); };
+$('#refMatch').onclick = () => {
+  const k = Math.min(1, 12000 / Math.max(ref.w, ref.h));
+  Object.assign(st, { preset: 'custom', cw: Math.max(64, Math.round(ref.w * k)), ch: Math.max(64, Math.round(ref.h * k)) });
+  save(); syncInputs(); fitAll();
+};
+const stage = $('.stage');
+stage.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+stage.addEventListener('drop', e => { e.preventDefault(); loadRefFile(e.dataTransfer.files[0]); });
+
+/* ---------- Share link ---------- */
+$('#share').onclick = async () => {
+  const diff = {};
+  for (const k in DEF) if (JSON.stringify(st[k]) !== JSON.stringify(DEF[k])) diff[k] = st[k];
+  const url = location.origin + location.pathname + '#g=' + b64(JSON.stringify(diff));
+  const note = ref ? ' The reference image is not included.' : '';
+  try { await navigator.clipboard.writeText(url); toast('Link copied.' + note); }
+  catch (e) { history.replaceState(null, '', url); toast('Copy the link from the address bar.' + note); }
+};
 
 /* ---------- Export ---------- */
 let downloads = null;
@@ -930,6 +1181,7 @@ $('#exPng').onclick = () => busy(this, async () => {
   const { W, H } = size();
   const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
   if (BG[st.bg]) { g.fillStyle = BG[st.bg]; g.fillRect(0, 0, W, H); }
+  if (st.refExport) drawRef(g, W, H, 1);
   drawPrims(g, build(W, H, { x0: 0, y0: 0, x1: W, y1: H }), 0, 1);
   const blob = await new Promise(r => c.toBlob(r, 'image/png'));
   if (!blob) throw new Error('png');
@@ -942,6 +1194,10 @@ $('#exSvg').onclick = () => busy(this, async () => {
   const dims = mm ? `width="${r2(mm[0])}mm" height="${r2(mm[1])}mm"` : `width="${W}" height="${H}"`;
   let s = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" ${dims} viewBox="0 0 ${W} ${H}">\n`;
   if (BG[st.bg]) s += `<rect width="${W}" height="${H}" fill="${BG[st.bg]}"/>\n`;
+  if (ref && st.refExport) {
+    const [x, y, w, h] = refRect(W, H).map(r2);
+    s += `<image href="${ref.src}" x="${x}" y="${y}" width="${w}" height="${h}" opacity="${r2(st.refOpacity)}" preserveAspectRatio="none"/>\n`;
+  }
   s += `<g fill="none" stroke-linecap="round">\n`;
   for (const p of P) s += `<line x1="${r2(p.s[0])}" y1="${r2(p.s[1])}" x2="${r2(p.s[2])}" y2="${r2(p.s[3])}" stroke="${p.c}" stroke-width="${r2(p.w)}" stroke-opacity="${r2(p.a)}"/>\n`;
   s += `</g>\n</svg>\n`;
@@ -954,6 +1210,10 @@ $('#exPdf').onclick = () => busy(this, async () => {
   const pw = mm ? mm[0] : W * 0.75, ph = mm ? mm[1] : H * 0.75, k = pw / W;
   const doc = new window.jspdf.jsPDF({ unit, format: [pw, ph], orientation: pw > ph ? 'landscape' : 'portrait', compress: true });
   if (BG[st.bg]) { doc.setFillColor(...hexRgb(BG[st.bg])); doc.rect(0, 0, pw, ph, 'F'); }
+  if (ref && st.refExport) {
+    const [x, y, w, h] = refRect(W, H);
+    doc.setGState(new doc.GState({ opacity: st.refOpacity })); doc.addImage(ref.src, 'JPEG', x * k, y * k, w * k, h * k);
+  }
   doc.setLineCap('round');
   const gs = {}; let lastA = null, lastC = null, lastW = null;
   for (const p of build(W, H, { x0: 0, y0: 0, x1: W, y1: H })) {
@@ -965,6 +1225,24 @@ $('#exPdf').onclick = () => busy(this, async () => {
   }
   await deliver(fileBase() + '.pdf', doc.output('blob'));
 });
+
+// Self-check, run with ?selftest: box edges must head for their vanishing point, and edgeLen must undo boxCorners.
+if (/[?&]selftest\b/.test(location.search)) {
+  const W = 3000, H = 2000, keep = st; let fails = 0;
+  for (const mode of [1, 2, 3, 6]) {
+    st = clean({ mode });
+    const cam = camera(W, H), b = { x: 0.5, y: 0.7, w: 0.2, d: 0.3, h: 0.25 }, p = boxCorners(cam, b, W, H);
+    for (const [axis, i] of [[0, 1], [1, 2], [2, 4]]) {
+      const ok = Math.abs(edgeLen(cam, b, axis, W, H, ...p[i]) / H - b['wdh'[axis]]) < 1e-6;
+      if (!ok) { fails++; console.error('edgeLen', mode, axis); }
+    }
+    if (mode !== 6) {
+      const key = mode === 1 ? 'd' : 'w', far = boxCorners(cam, { ...b, [key]: 1e7 }, W, H)[mode === 1 ? 2 : 1], V = vps(W, H)[0];
+      if (Math.hypot(far[0] - V.x, far[1] - V.y) > 1) { fails++; console.error('converge', mode, far, V); }
+    }
+  }
+  st = keep; console.log(fails ? `selftest: ${fails} failed` : 'selftest: all passed');
+}
 
 /* ---------- Boot ---------- */
 readTokens();
@@ -978,7 +1256,12 @@ themeSel.addEventListener('change', () => {
   if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
   try { t === 'system' ? localStorage.removeItem('vg-theme') : localStorage.setItem('vg-theme', t); } catch (e) {}
 });
+try {
+  const r = JSON.parse(localStorage.getItem(REF_KEY));
+  if (r && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(r.src) && r.w > 0 && r.h > 0) useRef({ src: r.src, w: +r.w, h: +r.h }, false);
+} catch (e) {}
 syncInputs();
+if (bootMsg) { save(); toast(bootMsg); }
 let first = true;
 new ResizeObserver(() => { resize(); if (first && cssW) { first = false; fitAll(); } }).observe(cv);
 })();
