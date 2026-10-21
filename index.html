@@ -144,6 +144,9 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .btns .btn { padding: 8px 12px; }
+.selbox { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--accent); border-radius: 9px; background: var(--bg); }
+.selt { font-weight: 600; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .hint { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font: 500 12px var(--font-body); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
@@ -179,10 +182,24 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
   html, body { height: auto; }
   .app { height: auto; grid-template-rows: auto auto; }
   .work { grid-template-columns: 1fr; }
-  .stage { height: 62svh; min-height: 360px; order: -1; }
+  /* the board stays pinned at the top so changes show while the controls scroll underneath */
+  .stage { height: 46svh; min-height: 280px; order: -1; position: sticky; top: 0; z-index: 3; box-shadow: 0 6px 16px var(--paper-shadow); }
+  .readout span { font-size: 11px; padding: 3px 6px; }
+  .exports { width: 100%; }
+  .exports select { flex: 1 1 auto; }
   .panel { overflow: visible; }
   .tag { display: none; }
   .tip { display: none; }
+}
+/* touch screens: finger-sized targets */
+@media (pointer: coarse) {
+  .btn, .btns .btn { padding: 11px 14px; }
+  .seg label { padding: 11px 4px; }
+  .check input { width: 22px; height: 22px; }
+  .row input[type=range] { height: 32px; }
+  select, input[type=number], input[type=text] { padding: 10px 8px; font-size: 16px; }   /* 16px stops iOS zooming on focus */
+  .zoom button { min-width: 44px; height: 40px; }
+  .chip { padding: 9px 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 </style>
@@ -331,14 +348,30 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
       </section>
 
       <section class="sec">
-        <h2>Boxes</h2>
+        <h2>Objects</h2>
+        <div class="btns" data-modes="1,2,3,6" aria-label="Add an object">
+          <button class="btn" type="button" data-add="box">+ Box</button>
+          <button class="btn" type="button" data-add="cyl">+ Cylinder</button>
+          <button class="btn" type="button" data-add="sph">+ Sphere</button>
+          <button class="btn" type="button" data-add="fig">+ Figure</button>
+        </div>
+        <div class="selbox" id="selPanel" hidden>
+          <span class="selt" id="selTitle"></span>
+          <label class="check" data-k="box,cyl"><input type="checkbox" id="selMid">Centre lines</label>
+          <div class="trio" data-k="box,cyl">
+            <label class="field" data-k="box"><span>Split width</span><input type="number" id="selS0" min="1" max="20" step="1"></label>
+            <label class="field" data-k="box"><span>Split depth</span><input type="number" id="selS1" min="1" max="20" step="1"></label>
+            <label class="field"><span>Split height</span><input type="number" id="selS2" min="1" max="20" step="1"></label>
+          </div>
+          <label class="check" data-k="fig"><input type="checkbox" id="selEye">Eyes on the horizon</label>
+          <p class="hint" data-k="fig">A figure as tall as the viewer has its eyes on the horizon wherever it stands, which sets the scale of the scene. Drag its head to make it taller or shorter.</p>
+        </div>
         <div class="btns" data-modes="1,2,3,6">
-          <button class="btn" id="boxAdd" type="button">Add box</button>
           <button class="btn" id="boxDel" type="button">Remove selected</button>
           <button class="btn" id="boxClear" type="button">Clear all</button>
         </div>
-        <p class="hint" data-modes="1,2,3,6">Drag a box to move it, and its square handles to change width, depth and height. Boxes follow the vanishing points when you move them. Delete removes the selected box.</p>
-        <p class="hint" data-modes="4,5">Boxes work in 1, 2 and 3-point and isometric grids.</p>
+        <p class="hint" data-modes="1,2,3,6">Drag an object to move it, and its square handles to change its size. Objects follow the vanishing points when you move them. Delete removes the selected one.</p>
+        <p class="hint" data-modes="4,5">Objects work in 1, 2 and 3-point and isometric grids.</p>
       </section>
 
       <section class="sec">
@@ -410,7 +443,7 @@ input[type=number] { font-family: var(--font-mono); font-size: 12px; }
 
     <main class="stage" aria-label="Drawing board">
       <canvas id="board" aria-label="Perspective grid preview. Drag vanishing points and the horizon to adjust."></canvas>
-      <div class="tip" id="tip">Drag points or the horizon. Drag empty space to pan, scroll to zoom.</div>
+      <div class="tip" id="tip">Drag points or the horizon. Drag empty space to pan, scroll or pinch to zoom.</div>
       <div class="zoom">
         <button type="button" id="zOut" aria-label="Zoom out">−</button>
         <button type="button" id="zFit" aria-label="Fit page and points">Fit</button>
@@ -447,6 +480,7 @@ const PRINT = { a5: [148, 210], a4: [210, 297], a3: [297, 420], letter: [215.9, 
 const SCREEN = { hd: [1920, 1080], qhd: [2560, 1440], uhd: [3840, 2160], ipad: [2732, 2048], square: [2048, 2048] };
 const NAMES = { a5: 'A5', a4: 'A4', a3: 'A3', letter: 'Letter', tabloid: 'Tabloid', hd: 'Full HD', qhd: 'QHD', uhd: '4K', ipad: 'iPad Pro', square: 'Square', custom: 'Custom' };
 
+const KINDS = { box: 'box', cyl: 'cylinder', sph: 'sphere', fig: 'figure' };
 const ENUMS = {
   mode: [1, 2, 3, 4, 5, 6], preset: [...Object.keys(PRINT), ...Object.keys(SCREEN), 'custom'], orient: ['landscape', 'portrait'],
   bg: Object.keys(BG), palette: [...Object.keys(PALETTES), 'custom'], isoAngle: [30, 26.565], dpi: [150, 300, 600]
@@ -470,7 +504,11 @@ function clean(s) {
   }
   if (Array.isArray(s.boxes)) o.boxes = s.boxes.slice(0, 50)
     .filter(b => b && ['x', 'y', 'w', 'd', 'h'].every(k => typeof b[k] === 'number' && isFinite(b[k])))
-    .map(b => ({ x: clamp(b.x, -2, 3), y: clamp(b.y, -2, 3), w: clamp(b.w, 0.005, 20), d: clamp(b.d, 0.005, 20), h: clamp(b.h, 0.005, 20) }));
+    .map(b => ({
+      x: clamp(b.x, -2, 3), y: clamp(b.y, -2, 3), w: clamp(b.w, 0.005, 20), d: clamp(b.d, 0.005, 20), h: clamp(b.h, 0.005, 20),
+      k: b.k in KINDS ? b.k : 'box', m: b.m === true, eye: b.eye !== false,
+      s: [0, 1, 2].map(i => Array.isArray(b.s) && isFinite(b.s[i]) ? clamp(Math.round(b.s[i]), 1, 20) : 1)
+    }));
   return o;
 }
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -662,21 +700,113 @@ function camera(W, H) {
   ax.push(st.mode === 3 ? toward(V[2]).map(k => V[2].y > hy ? -k : k) : [0, -1, 0]);
   return { o: [c.cx, c.cy], d: c.d, ax };
 }
-function boxCorners(cam, b, W, H) {
+// Returns f(u, v, t): the page point at fractions u of the width, v of the depth and t of the height; null behind the eye.
+// Lines built from these points (face splits, ellipses) come out in true perspective.
+function boxPt(cam, b, W, H) {
   const A = [b.x * W, b.y * H], len = [b.w * H, b.d * H, b.h * H];
   const P0 = cam.iso ? [A[0], A[1], 0] : [A[0] - cam.o[0], A[1] - cam.o[1], cam.d];
-  const pts = [];
-  // corner i: bit 0 = along width, bit 1 = along depth, bit 2 = up
-  for (let i = 0; i < 8; i++) {
-    const P = P0.slice();
-    for (let k = 0; k < 3; k++) if (i >> k & 1) for (let j = 0; j < 3; j++) P[j] += cam.ax[k][j] * len[k];
-    if (cam.iso) pts.push([P[0], P[1]]);
-    else pts.push(P[2] > cam.d * 0.02 ? [cam.o[0] + cam.d * P[0] / P[2], cam.o[1] + cam.d * P[1] / P[2]] : null);   // null: behind the eye
-  }
-  return pts;
+  return (u, v, t) => {
+    const f = [u, v, t], P = P0.slice();
+    for (let k = 0; k < 3; k++) for (let j = 0; j < 3; j++) P[j] += cam.ax[k][j] * len[k] * f[k];
+    if (cam.iso) return [P[0], P[1]];
+    return P[2] > cam.d * 0.02 ? [cam.o[0] + cam.d * P[0] / P[2], cam.o[1] + cam.d * P[1] / P[2]] : null;
+  };
 }
+// corner i: bit 0 = along width, bit 1 = along depth, bit 2 = up
+function boxCorners(cam, b, W, H) { const f = boxPt(cam, b, W, H); return Array.from({ length: 8 }, (_, i) => f(i & 1, i >> 1 & 1, i >> 2 & 1)); }
 const BOX_EDGES = [];
 for (let i = 0; i < 8; i++) for (let k = 0; k < 3; k++) if (!(i >> k & 1)) BOX_EDGES.push([i, i | 1 << k]);
+const ring = n => Array.from({ length: n + 1 }, (_, i) => i / n * 2 * Math.PI);
+
+// Figures: eyes sit at 0.93 of standing height. With "eyes on the horizon" on, a figure is as tall as the viewer,
+// so its height follows from where its feet stand. Otherwise (and in isometric) its stored height is used.
+const EYE = 0.93;
+function figH(cam, b, W, H) {
+  if (!cam.iso && b.eye) {
+    const e = cam.ax[2], P = [b.x * W - cam.o[0], b.y * H - cam.o[1], cam.d];
+    const q = (st.hz * H - cam.o[1]) / cam.d, t = (P[1] - q * cam.d) / (q * e[2] - e[1]);
+    if (t > 0 && isFinite(t)) return t / EYE;
+  }
+  return b.h * H;
+}
+// Mannequin: the right half of a standing figure's outline (8 heads tall), neck to crotch, as (across, up) in units of
+// standing height. It runs down the outside of the arm, round the hand, up the inside to the armpit, then down the body
+// and leg. It is mirrored for the left side and smoothed into curves.
+const FIG_HALF = [
+  [.03, .875], [.034, .85], [.07, .837], [.112, .818], [.128, .795], [.132, .74], [.128, .67], [.124, .61], [.118, .54],
+  [.106, .47], [.112, .43], [.1, .39], [.082, .405], [.084, .47], [.09, .54], [.096, .61], [.094, .7], [.088, .745],
+  [.08, .68], [.072, .62], [.084, .56], [.094, .51], [.09, .43], [.075, .33], [.065, .28], [.062, .2], [.05, .1],
+  [.04, .05], [.06, .012], [.056, 0], [.014, 0], [.018, .05], [.024, .12], [.03, .2], [.024, .28], [.02, .36], [.012, .44], [0, .47]
+];
+const chaikin = (P, n) => {
+  for (; n > 0; n--) {
+    const Q = [P[0]];
+    for (let i = 0; i < P.length - 1; i++) { const a = P[i], b = P[i + 1]; Q.push([.75 * a[0] + .25 * b[0], .75 * a[1] + .25 * b[1]], [.25 * a[0] + .75 * b[0], .25 * a[1] + .75 * b[1]]); }
+    Q.push(P[P.length - 1]); P = Q;
+  }
+  return P;
+};
+const FIG_OUTLINE = chaikin(FIG_HALF.concat(FIG_HALF.slice(0, -1).reverse().map(([a, t]) => [-a, t])), 2);
+function figFrame(cam, b, W, H) {
+  const f = boxPt(cam, { ...b, h: figH(cam, b, W, H) / H }, W, H), F = f(0, 0, 0), T = f(0, 0, 1);
+  if (!F || !T) return null;
+  const v = [T[0] - F[0], T[1] - F[1]], u = [-v[1], v[0]];   // u: across, as long as the figure is tall
+  return { T, at: (a, t) => [F[0] + v[0] * t + u[0] * a, F[1] + v[1] * t + u[1] * a] };
+}
+// Outline for hit testing, and the drag handles as [axis, point]
+function objGeom(cam, b, W, H) {
+  if (b.k === 'fig') {
+    const fr = figFrame(cam, b, W, H);
+    return fr ? { hull: [fr.at(-.15, 0), fr.at(.15, 0), fr.at(.15, 1), fr.at(-.15, 1)], handles: [[2, fr.T]] } : null;
+  }
+  const c = boxCorners(cam, b, W, H);
+  return { hull: c, handles: [[0, c[1]], [1, c[2]], [2, c[4]]] };
+}
+// Lines for one object: seg(p, q, weight, alpha), with weight relative to the object line weight
+function objPrims(cam, b, W, H, seg) {
+  const poly = (P, wt, al) => { for (let i = 1; i < P.length; i++) seg(P[i - 1], P[i], wt, al); };
+  if (b.k === 'fig') {
+    const fr = figFrame(cam, b, W, H); if (!fr) return;
+    poly(FIG_OUTLINE.map(([a, t]) => fr.at(a, t)), 1, 1);
+    poly(ring(32).map(a => fr.at(.05 * Math.cos(a), .933 + .062 * Math.sin(a))), 1, 1);
+    seg(fr.at(-.07, EYE), fr.at(.07, EYE), .5, .6);   // eye level: on the horizon for a viewer-height figure
+    return;
+  }
+  const f = boxPt(cam, b, W, H), c = boxCorners(cam, b, W, H), solid = b.k === 'box';
+  // cylinders and spheres keep their box as faint construction lines
+  for (const [i, j] of BOX_EDGES) seg(c[i], c[j], solid ? 1 : .5, solid ? 1 : .3);
+  const splits = k => { const n = b.s[k], out = []; for (let i = 1; i < n; i++) out.push(i / n); if (b.m && !out.some(x => Math.abs(x - .5) < 1e-9)) out.push(.5); return out; };
+  const ell = (t, wt, al) => poly(ring(48).map(a => f(.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a), t)), wt, al);
+  if (b.k === 'box') {
+    // a split along axis k is a ring of four lines around the faces that contain that axis
+    for (let k = 0; k < 3; k++) for (const x of splits(k)) for (let j = 0; j < 3; j++) if (j !== k) {
+      const m = 3 - k - j;
+      for (const side of [0, 1]) { const a = [0, 0, 0], e = [0, 0, 0]; a[k] = e[k] = x; a[m] = e[m] = side; e[j] = 1; seg(f(...a), f(...e), .6, .8); }
+    }
+  } else if (b.k === 'cyl') {
+    ell(0, 1, 1); ell(1, 1, 1);
+    for (const t of splits(2)) ell(t, .6, .8);
+    // sides: the circle points farthest either way across the cylinder's axis on screen
+    const A0 = f(.5, .5, 0), A1 = f(.5, .5, 1);
+    if (A0 && A1) {
+      const n = [A0[1] - A1[1], A1[0] - A0[0]], pts = ring(96).map(a => [.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a)]);
+      const side = pts.map(([u, v]) => { const p = f(u, v, 0); return p ? (p[0] - A0[0]) * n[0] + (p[1] - A0[1]) * n[1] : NaN; });
+      for (const best of [Math.max, Math.min]) { const i = side.indexOf(best(...side.filter(isFinite))); if (i >= 0) seg(f(...pts[i], 0), f(...pts[i], 1), 1, 1); }
+    }
+    if (b.m) seg(A0, A1, .6, .8);
+  } else {
+    // sphere: its outline is the hull of points over the surface, plus the equator and two meridians
+    const P = [];
+    for (let i = 0; i <= 12; i++) for (let j = 0; j < 24; j++) {
+      const la = -Math.PI / 2 + Math.PI * i / 12, lo = j / 24 * 2 * Math.PI;
+      const p = f(.5 + .5 * Math.cos(la) * Math.cos(lo), .5 + .5 * Math.cos(la) * Math.sin(lo), .5 + .5 * Math.sin(la)); if (p) P.push(p);
+    }
+    const h = hull(P); poly(h.concat([h[0]]), 1, 1);
+    ell(.5, .6, .8);
+    poly(ring(48).map(a => f(.5, .5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a))), .6, .8);
+    poly(ring(48).map(a => f(.5 + .5 * Math.cos(a), .5, .5 + .5 * Math.sin(a))), .6, .8);
+  }
+}
 // Length along one box axis that puts that edge's far corner at screen point (x, y)
 function edgeLen(cam, b, axis, W, H, x, y) {
   const A = [b.x * W, b.y * H], e = cam.ax[axis];
@@ -687,22 +817,20 @@ function edgeLen(cam, b, axis, W, H, x, y) {
   const q = (S[j] - cam.o[j]) / cam.d, den = q * e[2] - e[j];
   return Math.abs(den) < 1e-9 ? NaN : (P[j] - q * cam.d) / den;
 }
-function inHull(P, x, y) {
+const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+function hull(P) {
   P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lo = [], up = [];
-  for (const p of P) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
-  for (const p of P.reverse()) { while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
-  const h = lo.slice(0, -1).concat(up.slice(0, -1));
-  return h.length > 2 && h.every((p, i) => cr(p, h[(i + 1) % h.length], [x, y]) >= 0);
+  for (const p of P) { while (lo.length > 1 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of P.reverse()) { while (up.length > 1 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
 }
+function inHull(P, x, y) { const h = hull(P); return h.length > 2 && h.every((p, i) => cross(p, h[(i + 1) % h.length], [x, y]) >= 0); }
 
 function build(W, H, clip) {
-  const out = buildGrid(W, H, clip), cam = camera(W, H);
-  if (cam) for (const b of st.boxes) {
-    const p = boxCorners(cam, b, W, H);
-    for (const [i, j] of BOX_EDGES) if (p[i] && p[j]) { const s = clipSeg(...p[i], ...p[j], clip); if (s) out.push({ s, c: st.cH, w: st.weight * 1.4, a: 1 }); }
-  }
+  const out = buildGrid(W, H, clip), cam = camera(W, H), w = st.weight * 1.4;
+  const seg = (p, q, wt, al) => { if (!p || !q) return; const s = clipSeg(...p, ...q, clip); if (s) out.push({ s, c: st.cH, w: w * wt, a: al }); };
+  if (cam) for (const b of st.boxes) objPrims(cam, b, W, H, seg);
   return out;
 }
 function buildGrid(W, H, clip) {
@@ -785,7 +913,8 @@ let ref = null;   // { src, w, h, img }; w and h are the original image's size
 const refRect = (W, H) => { const k = Math.min(W / ref.w, H / ref.h); return [(W - ref.w * k) / 2, (H - ref.h * k) / 2, ref.w * k, ref.h * k]; };
 function drawRef(g, W, H, alphaMul) { if (!ref) return; g.globalAlpha = st.refOpacity * alphaMul; g.drawImage(ref.img, ...refRect(W, H)); g.globalAlpha = 1; }
 
-let sel = null;   // index of the selected box
+let sel = null;   // index of the selected object
+const coarse = matchMedia('(pointer: coarse)').matches;   // touch screen: draw bigger handles
 
 /* ---------- Board (preview) ---------- */
 const cv = $('#board'), ctx = cv.getContext('2d');
@@ -864,7 +993,7 @@ function render() {
   ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace'; ctx.textBaseline = 'middle';
   for (const h of handlePositions(W, H)) {
     const active = drag && drag.key === h.k;
-    ctx.beginPath(); ctx.arc(h.sx, h.sy, active ? 10 : 8, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(h.sx, h.sy, (active ? 10 : 8) + (coarse ? 3 : 0), 0, Math.PI * 2);
     ctx.fillStyle = h.off ? tokens['--panel'] : h.c; ctx.fill();
     ctx.lineWidth = 2.5; ctx.strokeStyle = h.off ? h.c : tokens['--panel']; ctx.stroke();
     if (!h.off) { ctx.lineWidth = 1; ctx.strokeStyle = h.c; ctx.beginPath(); ctx.arc(h.sx, h.sy, active ? 12 : 10, 0, Math.PI * 2); ctx.stroke(); }
@@ -874,16 +1003,18 @@ function render() {
     ctx.fillStyle = tokens['--panel']; ctx.globalAlpha = .92; ctx.fillRect(lx, h.sy - 9, tw + 10, 18); ctx.globalAlpha = 1;
     ctx.fillStyle = tokens['--ink']; ctx.fillText(label, lx + 5, h.sy);
   }
-  // selected box: accent outline and square handles for width, depth and height
-  const cam = st.boxes[sel] && camera(W, H);
-  if (cam) {
-    const p = boxCorners(cam, st.boxes[sel], W, H).map(q => q && toScreen(...q));
+  // selected object: accent outline and square drag handles
+  const cam = st.boxes[sel] && camera(W, H), g = cam && objGeom(cam, st.boxes[sel], W, H);
+  if (g) {
+    const p = g.hull.map(q => q && toScreen(...q)), hs = coarse ? 9 : 6;
     ctx.strokeStyle = tokens['--accent']; ctx.lineWidth = 2; ctx.beginPath();
-    for (const [i, j] of BOX_EDGES) if (p[i] && p[j]) { ctx.moveTo(...p[i]); ctx.lineTo(...p[j]); }
+    if (st.boxes[sel].k === 'fig') { ctx.moveTo(...p[3]); p.forEach(q => ctx.lineTo(...q)); }
+    else for (const [i, j] of BOX_EDGES) if (p[i] && p[j]) { ctx.moveTo(...p[i]); ctx.lineTo(...p[j]); }
     ctx.stroke();
-    for (const i of [1, 2, 4]) if (p[i]) {
-      ctx.fillStyle = tokens['--accent']; ctx.fillRect(p[i][0] - 6, p[i][1] - 6, 12, 12);
-      ctx.lineWidth = 2; ctx.strokeStyle = tokens['--panel']; ctx.strokeRect(p[i][0] - 6, p[i][1] - 6, 12, 12);
+    for (const [, q] of g.handles) if (q) {
+      const [x, y] = toScreen(...q);
+      ctx.fillStyle = tokens['--accent']; ctx.fillRect(x - hs, y - hs, hs * 2, hs * 2);
+      ctx.lineWidth = 2; ctx.strokeStyle = tokens['--panel']; ctx.strokeRect(x - hs, y - hs, hs * 2, hs * 2);
     }
   }
   updateReadout(W, H);
@@ -895,8 +1026,9 @@ function updateReadout(W, H) {
   const parts = [];
   parts.push(`<span><b>${NAMES[st.preset]}</b> ${W.toLocaleString()} × ${H.toLocaleString()} px${mm ? ` · ${st.dpi} dpi` : ''}</span>`);
   const len = px => mm ? `${(px / st.dpi * 25.4).toFixed(1)} mm` : `${Math.round(px).toLocaleString()} px`;
-  const b = st.boxes[sel];
-  if (b && camera(W, H)) parts.push(`<span>Box <b>${len(b.w * H)} × ${len(b.d * H)} × ${len(b.h * H)}</b> at its near corner</span>`);
+  const b = st.boxes[sel], bc = b && camera(W, H);
+  if (bc && b.k === 'fig') parts.push(`<span>Figure <b>${len(figH(bc, b, W, H))}</b> tall</span>`);
+  else if (bc) parts.push(`<span>${KINDS[b.k][0].toUpperCase() + KINDS[b.k].slice(1)} <b>${len(b.w * H)} × ${len(b.d * H)} × ${len(b.h * H)}</b> at its near corner</span>`);
   if (st.mode === 6) {
     const { s, v } = isoStep(W);
     parts.push(`<span>Cell <b>${len(s)}</b> wide · <b>${len(v)}</b> tall</span>`);
@@ -927,42 +1059,63 @@ function updateReadout(W, H) {
 let drag = null;
 function pt(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 // Box hits: 'bh0'..'bh2' for the selected box's width, depth and height handles, 'bb<n>' for box n's body
-function hitBox(sx, sy, W, H) {
+function hitBox(sx, sy, W, H, r) {
   const cam = camera(W, H); if (!cam) return null;
-  if (st.boxes[sel]) {
-    const p = boxCorners(cam, st.boxes[sel], W, H);
-    for (const [k, i] of [[0, 1], [1, 2], [2, 4]]) if (p[i]) { const [hx, hy] = toScreen(...p[i]); if (Math.hypot(hx - sx, hy - sy) < 14) return 'bh' + k; }
-  }
+  const g = st.boxes[sel] && objGeom(cam, st.boxes[sel], W, H);
+  if (g) for (const [k, q] of g.handles) if (q) { const [hx, hy] = toScreen(...q); if (Math.hypot(hx - sx, hy - sy) < r) return 'bh' + k; }
   for (let n = st.boxes.length - 1; n >= 0; n--) {
-    const p = boxCorners(cam, st.boxes[n], W, H).filter(Boolean).map(q => toScreen(...q));
-    if (p.length === 8 && inHull(p, sx, sy)) return 'bb' + n;
+    const o = objGeom(cam, st.boxes[n], W, H), p = o ? o.hull.filter(Boolean).map(q => toScreen(...q)) : [];
+    if (p.length === (o && o.hull.length) && inHull(p, sx, sy)) return 'bb' + n;
   }
   return null;
 }
-function hit(sx, sy) {
-  const { W, H } = size();
-  const box = hitBox(sx, sy, W, H);
+// fingers need bigger targets than a mouse
+function hit(sx, sy, touch) {
+  const { W, H } = size(), r = touch ? 26 : 14;
+  const box = hitBox(sx, sy, W, H, r);
   if (box && box.startsWith('bh')) return box;
-  let best = null, bd = 18;
+  let best = null, bd = r + 4;
   for (const h of handlePositions(W, H)) { const d = Math.hypot(h.sx - sx, h.sy - sy); if (d < bd) { bd = d; best = h.k; } }
   if (best) return best;
   if (box) return box;
-  if (st.mode !== 6 && Math.abs(toScreen(0, st.hz * H)[1] - sy) < 8) return 'hz';
+  if (st.mode !== 6 && Math.abs(toScreen(0, st.hz * H)[1] - sy) < (touch ? 14 : 8)) return 'hz';
   return null;
 }
+// Two fingers on the board pinch to zoom and pan; they replace whatever one finger was dragging
+const fingers = new Map();
+function pinchState() {
+  const [a, b] = [...fingers.values()], mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  return { dist: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, mid };
+}
 cv.addEventListener('pointerdown', e => {
-  const [sx, sy] = pt(e); const k = hit(sx, sy);
+  const [sx, sy] = pt(e);
+  try { cv.setPointerCapture(e.pointerId); } catch (err) {}   // throws if the pointer is already gone
+  if (e.pointerType === 'touch') fingers.set(e.pointerId, [sx, sy]);
+  if (fingers.size === 2) {
+    const p = pinchState();
+    drag = { key: 'pinch', dist: p.dist, s: view.s, at: toPaper(...p.mid) }; draw(); return;
+  }
+  if (fingers.size > 2) return;
+  const k = hit(sx, sy, e.pointerType === 'touch');
   const { W, H } = size(), [px, py] = toPaper(sx, sy);
   drag = { key: k || 'pan', lx: sx, ly: sy };
   if (!k) sel = null;
   else if (k.startsWith('bb')) { sel = +k.slice(2); const b = st.boxes[sel]; Object.assign(drag, { key: 'box', ox: px - b.x * W, oy: py - b.y * H }); }
   else if (k.startsWith('bh')) Object.assign(drag, { key: 'bh', axis: +k[2] });
   syncBoxes();
-  cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); draw();
+  cv.classList.add('dragging'); draw();
 });
 cv.addEventListener('pointermove', e => {
   const [sx, sy] = pt(e);
-  if (!drag) { const k = hit(sx, sy); cv.style.cursor = k === 'hz' ? 'ns-resize' : k ? 'move' : ''; return; }
+  if (fingers.has(e.pointerId)) fingers.set(e.pointerId, [sx, sy]);
+  if (drag && drag.key === 'pinch') {
+    if (fingers.size < 2) return;
+    const p = pinchState();
+    view.s = clamp(drag.s * p.dist / drag.dist, 0.005, 4);
+    view.cx = drag.at[0] - (p.mid[0] - cssW / 2) / view.s; view.cy = drag.at[1] - (p.mid[1] - cssH / 2) / view.s;
+    draw(); return;
+  }
+  if (!drag) { if (e.pointerType === 'mouse') { const k = hit(sx, sy); cv.style.cursor = k === 'hz' ? 'ns-resize' : k ? 'move' : ''; } return; }
   const { W, H } = size(); const [px, py] = toPaper(sx, sy);
   const nx = clamp(px / W, -4, 5), ny = clamp(py / H, -4, 5);
   switch (drag.key) {
@@ -974,6 +1127,7 @@ cv.addEventListener('pointermove', e => {
     case 'bh': {
       const cam = camera(W, H), b = st.boxes[sel], t = cam ? edgeLen(cam, b, drag.axis, W, H, px, py) : NaN;
       if (t > 0) b['wdh'[drag.axis]] = clamp(t / H, 0.005, 20);   // past the vanishing point t turns negative: keep the last size
+      if (t > 0 && b.k === 'fig' && b.eye) { b.eye = false; syncBoxes(); }   // a figure resized by hand is no longer viewer height
       break;
     }
     case 'fc': st.fx = clamp(nx, -1, 2); st.hz = clamp(ny, -1, 2); break;
@@ -989,7 +1143,11 @@ cv.addEventListener('pointermove', e => {
   drag.lx = sx; drag.ly = sy; draw();
   if (drag.key !== 'pan') syncInputs(true);
 });
-const endDrag = () => { if (!drag) return; drag = null; cv.classList.remove('dragging'); save(); syncInputs(); draw(); };
+const endDrag = e => {
+  fingers.delete(e.pointerId);
+  if (!drag || (drag.key === 'pinch' && fingers.size)) return;   // a pinch ends when the last finger lifts
+  drag = null; cv.classList.remove('dragging'); save(); syncInputs(); draw();
+};
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 cv.addEventListener('wheel', e => {
   e.preventDefault();
@@ -1084,13 +1242,28 @@ $('#reset').onclick = () => { st = clean(); sel = null; save(); syncInputs(); fi
 function syncBoxes() {
   if (!st.boxes[sel]) sel = null;
   $('#boxDel').disabled = sel === null; $('#boxClear').disabled = !st.boxes.length;
+  const b = st.boxes[sel];
+  $('#selPanel').hidden = !b || st.mode === 4 || st.mode === 5;
+  if (!b) return;
+  $('#selTitle').textContent = 'Selected ' + KINDS[b.k];
+  $$('#selPanel [data-k]').forEach(el => el.hidden = !el.dataset.k.split(',').includes(b.k));
+  $('#selMid').checked = b.m; $('#selEye').checked = b.eye;
+  [0, 1, 2].forEach(i => { const el = $('#selS' + i); if (document.activeElement !== el) el.value = b.s[i]; });
 }
 function removeBox() { if (sel === null) return; st.boxes.splice(sel, 1); sel = null; save(); syncBoxes(); draw(); }
-$('#boxAdd').onclick = () => {
-  // a new box stands a little below the horizon, near the middle of the page (beside the point in 1-point, so its depth shows)
-  st.boxes.push({ x: st.mode === 1 ? clamp(st.vp0 + 0.12, 0.05, 0.8) : 0.5, y: st.mode === 6 ? 0.62 : clamp(st.hz + 0.25, 0.15, 0.9), w: 0.18, d: 0.18, h: 0.24 });
+const SHAPES = { box: [0.18, 0.18, 0.24], cyl: [0.16, 0.16, 0.26], sph: [0.2, 0.2, 0.2], fig: [0.05, 0.05, 0.3] };
+$$('[data-add]').forEach(btn => btn.onclick = () => {
+  // new objects stand a little below the horizon near the middle (beside the point in 1-point, so depth shows);
+  // each new one steps sideways so they do not stack
+  const k = btn.dataset.add, [w, d, h] = SHAPES[k], n = st.boxes.length % 4;
+  const x = (st.mode === 1 ? clamp(st.vp0 + 0.12, 0.05, 0.6) : 0.2) + n * 0.17;
+  st.boxes.push({ x, y: st.mode === 6 ? 0.62 : clamp(st.hz + 0.25, 0.15, 0.9), w, d, h, k, m: false, eye: true, s: [1, 1, 1] });
   sel = st.boxes.length - 1; save(); syncBoxes(); draw();
-};
+});
+const editSel = fn => () => { const b = st.boxes[sel]; if (!b) return; fn(b); save(); syncBoxes(); draw(); };
+$('#selMid').onchange = editSel(b => b.m = $('#selMid').checked);
+$('#selEye').onchange = editSel(b => b.eye = $('#selEye').checked);
+[0, 1, 2].forEach(i => $('#selS' + i).oninput = editSel(b => { const v = parseInt($('#selS' + i).value, 10); if (v > 0) b.s[i] = clamp(v, 1, 20); }));
 $('#boxDel').onclick = removeBox;
 $('#boxClear').onclick = () => { st.boxes = []; sel = null; save(); syncBoxes(); draw(); };
 document.addEventListener('keydown', e => {
@@ -1239,6 +1412,14 @@ if (/[?&]selftest\b/.test(location.search)) {
     if (mode !== 6) {
       const key = mode === 1 ? 'd' : 'w', far = boxCorners(cam, { ...b, [key]: 1e7 }, W, H)[mode === 1 ? 2 : 1], V = vps(W, H)[0];
       if (Math.hypot(far[0] - V.x, far[1] - V.y) > 1) { fails++; console.error('converge', mode, far, V); }
+      // a viewer-height figure's eyes sit on the horizon
+      const fb = { ...b, k: 'fig', eye: true }, eyeY = boxPt(cam, { ...fb, h: figH(cam, fb, W, H) * EYE / H }, W, H)(0, 0, 1)[1];
+      if (Math.abs(eyeY - st.hz * H) > 0.5) { fails++; console.error('figure eye', mode, eyeY, st.hz * H); }
+    }
+    // every kind, with helpers on, draws some lines
+    for (const k of Object.keys(KINDS)) {
+      let n = 0; objPrims(cam, { ...b, k, m: true, eye: true, s: [3, 2, 4] }, W, H, (p, q) => { if (p && q) n++; });
+      if (!n) { fails++; console.error('no lines', mode, k); }
     }
   }
   st = keep; console.log(fails ? `selftest: ${fails} failed` : 'selftest: all passed');

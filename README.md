@@ -11,7 +11,10 @@ A free, browser-based perspective grid maker for artists. Everything runs on the
 
 ## Tools
 
-- Boxes in 1, 2 and 3-point and isometric grids: drag to move, drag the handles to set width, depth and height. Boxes follow the vanishing points and appear in every export.
+- Objects in 1, 2 and 3-point and isometric grids: boxes, cylinders, spheres and figures. Drag to move, drag the handles to resize. Objects follow the vanishing points and appear in every export.
+- Box helpers: centre lines, and splitting the width, depth or height into equal parts (for windows and floors), drawn in true perspective. Cylinders can be split by height.
+- Figures: a mannequin whose eyes sit on the horizon, the height of a viewer standing in the scene, so you can judge scale anywhere on the ground. Drag its head to set another height.
+- Works on phones and tablets: pinch to zoom, finger-sized controls, and the board stays at the top while you scroll the settings.
 - Reference image: put a photo or sketch under the grid at any opacity, optionally included in downloads.
 - Copy link: shares the current settings and boxes in the URL (not the reference image).
 - Light, dark, system and WastedDesigner colour schemes.
