@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Free perspective grid maker for artists: 1, 2, 3, 4 and 5-point and isometric grids, downloadable as PNG, SVG or PDF.">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Vanishing Grids</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Layout: drafting-table app. Tool rail on the left, a pannable drawing board on the right; stacks on phones. */
+:root {
+  --bg: #E9EDF1;
+  --panel: #FAFBFC;
+  --ink: #18212C;
+  --muted: #5B6878;
+  --rule: #D3DAE2;
+  --accent: #2B57CC;
+  --accent-ink: #FFFFFF;
+  --stage: #DCE2E9;
+  --stage-dot: #C6CFD9;
+  --paper-shadow: rgba(24, 33, 44, 0.18);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151B; --panel: #181E26; --ink: #E3E8EE; --muted: #8C98A7; --rule: #29323D;
+    --accent: #7D9CFF; --accent-ink: #0E1320; --stage: #0B0E12; --stage-dot: #1C232C;
+    --paper-shadow: rgba(0, 0, 0, 0.55); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151B; --panel: #181E26; --ink: #E3E8EE; --muted: #8C98A7; --rule: #29323D;
+  --accent: #7D9CFF; --accent-ink: #0E1320; --stage: #0B0E12; --stage-dot: #1C232C;
+  --paper-shadow: rgba(0, 0, 0, 0.55); color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0; box-sizing: border-box;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; gap: 12px; padding-block: 12px 16px; }
+
+/* Header */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { flex: none; }
+.word { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
+.tag { color: var(--muted); font-size: 13px; }
+.exports { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.exports .lbl { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.btn {
+  font: 600 13px/1 var(--font-body); padding: 9px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--panel); color: var(--ink);
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: progress; }
+.btn:focus-visible, input:focus-visible, select:focus-visible, .seg label:focus-within, .swatch:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Work area */
+.work { min-height: 0; display: grid; grid-template-columns: 320px 1fr; gap: 12px; }
+.panel {
+  min-height: 0; overflow-y: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 4px 16px 16px; display: flex; flex-direction: column;
+}
+.sec { display: flex; flex-direction: column; gap: 12px; padding-block: 16px; border-bottom: 1px solid var(--rule); }
+.sec:last-child { border-bottom: 0; }
+.sec h2 { margin: 0; font: 600 11px/1 var(--font-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; }
+.row > label { font-weight: 500; }
+.row output, .mono { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > span { font-size: 12px; color: var(--muted); }
+select, input[type=number], input[type=text] {
+  width: 100%; font: 500 13px var(--font-body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--rule); border-radius: 7px; padding: 7px 8px;
+}
+input[type=number] { font-family: var(--font-mono); font-size: 12px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg); border: 1px solid var(--rule); border-radius: 9px; padding: 3px; gap: 3px; }
+.seg label { text-align: center; padding: 8px 4px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px var(--paper-shadow); }
+.check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.hint { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 12px var(--font-body); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip i { display: inline-flex; }
+.chip i b { width: 8px; height: 8px; border-radius: 50%; display: block; margin-right: -2px; border: 1px solid var(--panel); }
+.chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.colors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.colors label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); align-items: center; text-align: center; }
+.colors input[type=color] { width: 100%; height: 30px; border: 1px solid var(--rule); border-radius: 7px; padding: 2px; background: var(--bg); cursor: pointer; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch { cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.swatch input { position: absolute; opacity: 0; pointer-events: none; }
+.swatch span.s { width: 36px; height: 26px; border-radius: 6px; border: 1px solid var(--rule); display: block; }
+.swatch:has(input:checked) span.s { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.s.white { background: #FFFFFF; } .s.paper { background: #F4EEE1; } .s.slate { background: #1D2229; }
+.s.clear { background: repeating-conic-gradient(#C9CED4 0 25%, #FFFFFF 0 50%) 0 0 / 10px 10px; }
+
+/* Stage */
+.stage { position: relative; min-width: 0; min-height: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--rule); background: var(--stage); }
+#board { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; display: block; }
+#board.dragging { cursor: grabbing; }
+.zoom { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--rule); border-radius: 9px; padding: 3px; }
+.zoom button { font: 600 13px var(--font-mono); min-width: 32px; height: 30px; border: 0; background: transparent; color: var(--ink); border-radius: 6px; cursor: pointer; }
+.zoom button:hover { background: var(--bg); }
+.readout { position: absolute; left: 10px; bottom: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.readout span { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 4px 8px; font: 12px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.readout b { color: var(--ink); font-weight: 500; }
+.tip { position: absolute; top: 10px; left: 10px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 4px 8px; max-width: calc(100% - 160px); }
+.toast { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 500; font-size: 13px; transition: opacity .2s; opacity: 0; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+
+@media (max-width: 820px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-rows: auto auto; }
+  .work { grid-template-columns: 1fr; }
+  .stage { height: 62svh; min-height: 360px; order: -1; }
+  .panel { overflow: visible; }
+  .tag { display: none; }
+  .tip { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+        <rect x="1" y="1" width="28" height="28" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".35"/>
+        <path d="M15 12 L1 4 M15 12 L1 20 M15 12 L29 4 M15 12 L29 20 M15 12 L8 29 M15 12 L22 29" stroke="var(--accent)" stroke-width="1.4" fill="none"/>
+        <path d="M1 12 H29" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      <span class="word">Vanishing Grids</span>
+      <span class="tag">Perspective grids for drawing, painting and concept art</span>
+    </div>
+    <div class="exports">
+      <span class="lbl">Download</span>
+      <button class="btn primary" id="exPng" type="button">PNG</button>
+      <button class="btn" id="exSvg" type="button">SVG</button>
+      <button class="btn" id="exPdf" type="button">PDF</button>
+    </div>
+  </header>
+
+  <div class="work">
+    <aside class="panel" aria-label="Grid settings">
+      <section class="sec">
+        <h2>Perspective</h2>
+        <div class="seg" role="radiogroup" aria-label="Number of vanishing points">
+          <label title="1-point"><input type="radio" name="mode" id="mode1" value="1">1-pt</label>
+          <label title="2-point"><input type="radio" name="mode" id="mode2" value="2">2-pt</label>
+          <label title="3-point"><input type="radio" name="mode" id="mode3" value="3">3-pt</label>
+          <label title="4-point curvilinear"><input type="radio" name="mode" id="mode4" value="4">4-pt</label>
+          <label title="5-point curvilinear"><input type="radio" name="mode" id="mode5" value="5">5-pt</label>
+          <label title="Isometric"><input type="radio" name="mode" id="mode6" value="6">Iso</label>
+        </div>
+        <p class="hint" id="modeHint"></p>
+      </section>
+
+      <section class="sec" data-modes="6">
+        <h2>Isometric</h2>
+        <div class="seg" role="radiogroup" aria-label="Isometric angle">
+          <label><input type="radio" name="isoAngle" id="iso30" value="30">True 30°</label>
+          <label><input type="radio" name="isoAngle" id="iso26" value="26.565">Pixel art 2:1</label>
+        </div>
+        <div class="row">
+          <label for="cells">Cells across the page</label><output data-for="cells"></output>
+          <input type="range" id="cells" data-bind="cells" min="4" max="120" step="1">
+        </div>
+        <label class="check"><input type="checkbox" id="isoVert" data-bind="isoVert">Vertical lines</label>
+        <p class="hint">Parallel lines never meet, so sizes stay the same at any depth. Pixel art 2:1 steps two pixels across for every one up, which keeps tile edges clean in games.</p>
+      </section>
+
+      <section class="sec" data-modes="1,2,3,4,5">
+        <h2>Vanishing points</h2>
+        <div class="row">
+          <label for="hz" id="hzLabel">Horizon height</label><output data-for="hz"></output>
+          <input type="range" id="hz" data-bind="hz" data-pct min="-20" max="120" step="0.5">
+        </div>
+        <div class="pair" data-modes="1">
+          <label class="field"><span>VP across (% of width)</span><input type="number" id="vp0" data-bind="vp0" data-pct step="1"></label>
+        </div>
+        <div class="pair" data-modes="2,3">
+          <label class="field"><span>VP1 across (%)</span><input type="number" id="vp1" data-bind="vp1" data-pct step="1"></label>
+          <label class="field"><span>VP2 across (%)</span><input type="number" id="vp2" data-bind="vp2" data-pct step="1"></label>
+        </div>
+        <div class="pair" data-modes="3">
+          <label class="field"><span>VP3 across (%)</span><input type="number" id="vp3x" data-bind="vp3x" data-pct step="1"></label>
+          <label class="field"><span>VP3 down (%)</span><input type="number" id="vp3y" data-bind="vp3y" data-pct step="1"></label>
+        </div>
+        <div class="pair" data-modes="4,5">
+          <label class="field"><span>Centre across (%)</span><input type="number" id="fx" data-bind="fx" data-pct step="1"></label>
+        </div>
+        <div class="row" data-modes="5">
+          <label for="fr">Fisheye circle size</label><output data-for="fr"></output>
+          <input type="range" id="fr" data-bind="fr" data-pct min="30" max="300" step="1">
+        </div>
+        <div class="row" data-modes="4">
+          <label for="f4w">Left to right points</label><output data-for="f4w"></output>
+          <input type="range" id="f4w" data-bind="f4w" data-pct min="30" max="400" step="1">
+        </div>
+        <div class="row" data-modes="4">
+          <label for="f4h">Top to bottom points</label><output data-for="f4h"></output>
+          <input type="range" id="f4h" data-bind="f4h" data-pct min="30" max="400" step="1">
+        </div>
+        <p class="hint">Drag the points and the horizon on the board. Points can sit off the page, which gives a calmer, less distorted grid.</p>
+      </section>
+
+      <section class="sec">
+        <h2>Lines</h2>
+        <div class="row" data-modes="1,2,3,5">
+          <label for="rays" id="raysLabel">Lines per vanishing point</label><output data-for="rays"></output>
+          <input type="range" id="rays" data-bind="rays" min="4" max="120" step="1">
+        </div>
+        <div class="row" data-modes="4,5">
+          <label for="curves">Curved lines each way</label><output data-for="curves"></output>
+          <input type="range" id="curves" data-bind="curves" min="2" max="60" step="1">
+        </div>
+        <div class="row" data-modes="1,2">
+          <label for="verticals">Vertical columns</label><output data-for="verticals"></output>
+          <input type="range" id="verticals" data-bind="verticals" min="0" max="80" step="1">
+        </div>
+        <div class="row" data-modes="1">
+          <label for="horizontals">Horizontal lines</label><output data-for="horizontals"></output>
+          <input type="range" id="horizontals" data-bind="horizontals" min="0" max="60" step="1">
+        </div>
+        <label class="check" data-modes="1"><input type="checkbox" id="floor" data-bind="floor">Space horizontals as a receding floor and ceiling</label>
+        <div class="row">
+          <label for="weight">Line weight</label><output data-for="weight"></output>
+          <input type="range" id="weight" data-bind="weight" min="0.5" max="12" step="0.5">
+        </div>
+        <div class="row">
+          <label for="opacity">Line opacity</label><output data-for="opacity"></output>
+          <input type="range" id="opacity" data-bind="opacity" data-pct min="10" max="100" step="5">
+        </div>
+        <div class="row">
+          <label for="accent">Heavier line every</label><output data-for="accent"></output>
+          <input type="range" id="accent" data-bind="accent" min="0" max="12" step="1">
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Colour</h2>
+        <div class="chips" id="palettes"></div>
+        <div class="colors">
+          <label><span id="lab-c1">VP1</span><input type="color" id="c1" data-bind="c1"></label>
+          <label><span id="lab-c2">VP2</span><input type="color" id="c2" data-bind="c2"></label>
+          <label><span id="lab-c3">VP3</span><input type="color" id="c3" data-bind="c3"></label>
+          <label><span>Horizon</span><input type="color" id="cH" data-bind="cH"></label>
+        </div>
+        <div class="field">
+          <span>Background</span>
+          <div class="swatches" role="radiogroup" aria-label="Background">
+            <label class="swatch"><input type="radio" name="bg" id="bgWhite" value="white"><span class="s white"></span>White</label>
+            <label class="swatch"><input type="radio" name="bg" id="bgPaper" value="paper"><span class="s paper"></span>Paper</label>
+            <label class="swatch"><input type="radio" name="bg" id="bgSlate" value="slate"><span class="s slate"></span>Slate</label>
+            <label class="swatch"><input type="radio" name="bg" id="bgClear" value="clear"><span class="s clear"></span>None</label>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Guides</h2>
+        <label class="check" data-modes="1,2,3,4,5"><input type="checkbox" id="showHorizon" data-bind="showHorizon">Horizon line</label>
+        <label class="check" data-modes="5"><input type="checkbox" id="showRim" data-bind="showRim">Fisheye circle outline</label>
+        <label class="check" data-modes="1,2,3,4,5"><input type="checkbox" id="showMarks" data-bind="showMarks">Mark vanishing points on the page</label>
+        <p class="hint" data-modes="6">Isometric grids have no horizon or vanishing points.</p>
+        <label class="check" data-modes="2,3"><input type="checkbox" id="showCone" data-bind="showCone">60° cone of vision</label>
+        <p class="hint" data-modes="2,3">The cone shows where the grid stays undistorted. Keep your subject inside it, or push the points further apart.</p>
+      </section>
+
+      <section class="sec">
+        <h2>Page</h2>
+        <label class="field"><span>Size</span>
+          <select id="preset" data-bind="preset">
+            <optgroup label="Print">
+              <option value="a5">A5 · 148 × 210 mm</option>
+              <option value="a4">A4 · 210 × 297 mm</option>
+              <option value="a3">A3 · 297 × 420 mm</option>
+              <option value="letter">US Letter · 8.5 × 11 in</option>
+              <option value="tabloid">Tabloid · 11 × 17 in</option>
+            </optgroup>
+            <optgroup label="Screen">
+              <option value="hd">Full HD · 1920 × 1080</option>
+              <option value="qhd">QHD · 2560 × 1440</option>
+              <option value="uhd">4K · 3840 × 2160</option>
+              <option value="ipad">iPad Pro 12.9" · 2732 × 2048</option>
+              <option value="square">Square · 2048 × 2048</option>
+            </optgroup>
+            <option value="custom">Custom size in pixels</option>
+          </select>
+        </label>
+        <div class="seg" role="radiogroup" aria-label="Orientation">
+          <label><input type="radio" name="orient" id="orL" value="landscape">Landscape</label>
+          <label><input type="radio" name="orient" id="orP" value="portrait">Portrait</label>
+        </div>
+        <label class="field" data-print><span>Resolution for PNG</span>
+          <select id="dpi" data-bind="dpi" data-num>
+            <option value="150">150 dpi · drafts</option>
+            <option value="300">300 dpi · print</option>
+            <option value="600">600 dpi · fine line</option>
+          </select>
+        </label>
+        <div class="pair" data-custom>
+          <label class="field"><span>Width (px)</span><input type="number" id="cw" data-bind="cw" min="64" max="12000" step="1"></label>
+          <label class="field"><span>Height (px)</span><input type="number" id="ch" data-bind="ch" min="64" max="12000" step="1"></label>
+        </div>
+        <label class="field"><span>File name</span><input type="text" id="fname" data-bind="name" data-str spellcheck="false"></label>
+        <button class="btn" id="reset" type="button">Reset to defaults</button>
+      </section>
+    </aside>
+
+    <main class="stage" aria-label="Drawing board">
+      <canvas id="board" aria-label="Perspective grid preview. Drag vanishing points and the horizon to adjust."></canvas>
+      <div class="tip" id="tip">Drag points or the horizon. Drag empty space to pan, scroll to zoom.</div>
+      <div class="zoom">
+        <button type="button" id="zOut" aria-label="Zoom out">−</button>
+        <button type="button" id="zFit" aria-label="Fit page and points">Fit</button>
+        <button type="button" id="zIn" aria-label="Zoom in">+</button>
+      </div>
+      <div class="readout" id="readout" aria-live="polite"></div>
+      <div class="toast" id="toast" role="status"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+(() => {
+const KEY = 'vanishing-grids-v1';
+const DEF = {
+  v: 1, mode: 2, preset: 'a4', orient: 'landscape', dpi: 300, cw: 3000, ch: 2000,
+  hz: 0.42, vp0: 0.5, vp1: -0.18, vp2: 1.22, vp3x: 0.5, vp3y: 2.1,
+  rays: 36, verticals: 24, horizontals: 16, floor: true,
+  weight: 2, opacity: 0.7, accent: 6,
+  palette: 'tri', c1: '#2B57CC', c2: '#D2416E', c3: '#2E9A6A', cH: '#1B2430',
+  bg: 'white', showHorizon: true, showMarks: true, showCone: false, name: 'perspective-grid',
+  fx: 0.5, fr: 1.15, curves: 14, showRim: true, f4w: 1.3, f4h: 1.7,
+  cells: 24, isoAngle: 30, isoVert: true
+};
+const PALETTES = {
+  tri:      { label: 'Tri-colour',      c1: '#2B57CC', c2: '#D2416E', c3: '#2E9A6A', cH: '#1B2430' },
+  npb:      { label: 'Non-photo blue',  c1: '#6EC3E0', c2: '#6EC3E0', c3: '#6EC3E0', cH: '#2E8DB5' },
+  graphite: { label: 'Graphite',        c1: '#7A828C', c2: '#7A828C', c3: '#7A828C', cH: '#23272D' },
+  chalk:    { label: 'Chalk (for dark)', c1: '#9DB8FF', c2: '#FF92B4', c3: '#86E3B6', cH: '#F2F4F7' }
+};
+const BG = { white: '#FFFFFF', paper: '#F4EEE1', slate: '#1D2229', clear: null };
+const PRINT = { a5: [148, 210], a4: [210, 297], a3: [297, 420], letter: [215.9, 279.4], tabloid: [279.4, 431.8] };
+const SCREEN = { hd: [1920, 1080], qhd: [2560, 1440], uhd: [3840, 2160], ipad: [2732, 2048], square: [2048, 2048] };
+const NAMES = { a5: 'A5', a4: 'A4', a3: 'A3', letter: 'Letter', tabloid: 'Tabloid', hd: 'Full HD', qhd: 'QHD', uhd: '4K', ipad: 'iPad Pro', square: 'Square', custom: 'Custom' };
+
+let st = load();
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return Object.assign({}, DEF, s); } catch (e) {}
+  return Object.assign({}, DEF);
+}
+let saveT;
+function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }, 250); }
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/* ---------- Page size ---------- */
+function size() {
+  let W, H, mm = null;
+  if (PRINT[st.preset]) {
+    let [w, h] = PRINT[st.preset];
+    if (st.orient === 'landscape') [w, h] = [h, w];
+    mm = [w, h];
+    W = Math.round(w / 25.4 * st.dpi); H = Math.round(h / 25.4 * st.dpi);
+  } else if (SCREEN[st.preset]) {
+    let [w, h] = SCREEN[st.preset];
+    if ((st.orient === 'portrait' && w > h) || (st.orient === 'landscape' && h > w)) [w, h] = [h, w];
+    W = w; H = h;
+  } else {
+    W = clamp(Math.round(+st.cw || 3000), 64, 12000); H = clamp(Math.round(+st.ch || 2000), 64, 12000);
+  }
+  return { W, H, mm };
+}
+
+/* ---------- Geometry ---------- */
+function vps(W, H) {
+  const hy = st.hz * H;
+  if (st.mode === 6) return [];
+  if (st.mode === 4 || st.mode === 5) {
+    const f = fish(W, H);
+    return [
+      { k: 'fc', n: st.mode === 4 ? 'Move' : 'Centre', x: f.cx, y: f.cy, c: st.mode === 4 ? st.cH : st.c1, guide: st.mode === 4 },
+      { k: 'fW', n: 'Left', x: f.cx - f.Rx, y: f.cy, c: st.c2 },
+      { k: 'fE', n: 'Right', x: f.cx + f.Rx, y: f.cy, c: st.c2 },
+      { k: 'fN', n: 'Top', x: f.cx, y: f.cy - f.Ry, c: st.c3 },
+      { k: 'fS', n: 'Bottom', x: f.cx, y: f.cy + f.Ry, c: st.c3 }
+    ];
+  }
+  if (st.mode === 1) return [{ k: 'vp0', n: 'VP', x: st.vp0 * W, y: hy, c: st.c1 }];
+  const a = [{ k: 'vp1', n: 'VP1', x: st.vp1 * W, y: hy, c: st.c1 }, { k: 'vp2', n: 'VP2', x: st.vp2 * W, y: hy, c: st.c2 }];
+  if (st.mode === 3) a.push({ k: 'vp3', n: 'VP3', x: st.vp3x * W, y: st.vp3y * H, c: st.c3 });
+  return a;
+}
+function clipSeg(x1, y1, x2, y2, r) {
+  let t0 = 0, t1 = 1; const dx = x2 - x1, dy = y2 - y1;
+  const p = [-dx, dx, -dy, dy], q = [x1 - r.x0, r.x1 - x1, y1 - r.y0, r.y1 - y1];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) { if (q[i] < 0) return null; }
+    else {
+      const t = q[i] / p[i];
+      if (p[i] < 0) { if (t > t1) return null; if (t > t0) t0 = t; }
+      else { if (t < t0) return null; if (t < t1) t1 = t; }
+    }
+  }
+  return [x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy];
+}
+function rayAngles(v, W, H, n) {
+  if (v.x >= 0 && v.x <= W && v.y >= 0 && v.y <= H) return Array.from({ length: n }, (_, i) => i * 2 * Math.PI / n);
+  const base = Math.atan2(H / 2 - v.y, W / 2 - v.x);
+  let lo = Infinity, hi = -Infinity;
+  for (const [cx, cy] of [[0, 0], [W, 0], [0, H], [W, H]]) {
+    let d = Math.atan2(cy - v.y, cx - v.x) - base; d = Math.atan2(Math.sin(d), Math.cos(d));
+    lo = Math.min(lo, d); hi = Math.max(hi, d);
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(base + lo + (hi - lo) * (n === 1 ? 0.5 : i / (n - 1)));
+  return out;
+}
+// Centre of vision and station-point distance. Two VPs 90° apart put the eye on the circle over them;
+// with three VPs the centre of vision is the orthocentre of their triangle.
+function cone(W, H) {
+  const hy = st.hz * H;
+  if (st.mode === 2) {
+    const a = Math.min(st.vp1, st.vp2) * W, b = Math.max(st.vp1, st.vp2) * W;
+    const cx = clamp(W / 2, a, b); const d2 = (cx - a) * (b - cx);
+    if (d2 <= 1) return null; const d = Math.sqrt(d2);
+    return { cx, cy: hy, d, r: d * Math.tan(Math.PI / 6) };
+  }
+  if (st.mode === 3) {
+    const A = { x: st.vp1 * W, y: hy }, B = { x: st.vp2 * W, y: hy }, C = { x: st.vp3x * W, y: st.vp3y * H };
+    if (Math.abs(C.y - B.y) < 1) return null;
+    const oy = A.y - (C.x - A.x) * (C.x - B.x) / (C.y - B.y);
+    const O = { x: C.x, y: oy };
+    const d2 = -((A.x - O.x) * (B.x - O.x) + (A.y - O.y) * (B.y - O.y));
+    if (d2 <= 1) return null; const d = Math.sqrt(d2);
+    return { cx: O.x, cy: O.y, d, r: d * Math.tan(Math.PI / 6) };
+  }
+  return null;
+}
+// 5-point curvilinear: an equidistant fisheye. The circle spans 180°, so evenly spaced
+// crossings on the horizon and centre line are evenly spaced angles.
+// 4-point curvilinear uses the same arcs without the centre point, and its width and height can differ.
+function fish(W, H) {
+  const cx = st.fx * W, cy = st.hz * H;
+  if (st.mode === 4) return { cx, cy, Rx: st.f4w * W / 2, Ry: st.f4h * H / 2 };
+  const R = st.fr * Math.min(W, H) / 2;
+  return { cx, cy, R, Rx: R, Ry: R };
+}
+function isoStep(W) { const s = W / st.cells; return { s, v: 2 * s * Math.tan(st.isoAngle * Math.PI / 180) }; }
+
+function buildIso(W, H, clip, L, accentOn, w, a) {
+  const { s, v } = isoStep(W), cx = W / 2, cy = H / 2, m = Math.tan(st.isoAngle * Math.PI / 180);
+  const sty = (i, c) => { const acc = accentOn(Math.abs(i)); return [c, acc ? w * 2 : w, acc ? Math.min(1, a + .25) : a]; };
+  if (st.isoVert) {
+    const k0 = Math.floor((clip.x0 - cx) / s), k1 = Math.ceil((clip.x1 - cx) / s);
+    for (let k = k0; k <= k1; k++) { const x = cx + k * s; L(x, clip.y0, x, clip.y1, ...sty(k, st.c3)); }
+  }
+  for (const [slope, col] of [[-m, st.c1], [m, st.c2]]) {
+    const b0 = cy - slope * cx;
+    const bs = [[clip.x0, clip.y0], [clip.x1, clip.y0], [clip.x0, clip.y1], [clip.x1, clip.y1]].map(([x, y]) => y - slope * x);
+    const j0 = Math.floor((Math.min(...bs) - b0) / v), j1 = Math.ceil((Math.max(...bs) - b0) / v);
+    for (let j = j0; j <= j1; j++) {
+      const b = b0 + j * v;
+      L(clip.x0, slope * clip.x0 + b, clip.x1, slope * clip.x1 + b, ...sty(j, col));
+    }
+  }
+}
+function buildFish(W, H, clip, L, accentOn, w, a, poly) {
+  const { cx, cy, R, Rx, Ry } = fish(W, H), n = Math.max(2, Math.round(st.curves)), steps = 72;
+  const sty = (i, c) => { const acc = accentOn(Math.abs(i)); return [c, acc ? w * 2 : w, acc ? Math.min(1, a + .25) : a]; };
+  // Arc through (0,-E) and (0,E) that crosses the other axis at t: a circle centred on that axis.
+  const arc = (t, E) => {
+    if (Math.abs(t) < 1e-9) return [[0, -E], [0, E]];
+    const h = (t * t - E * E) / (2 * t), rho = Math.abs(t - h), sg = Math.sign(t - h), pts = [];
+    for (let k = 0; k <= steps; k++) {
+      const u = E * Math.sin(-Math.PI / 2 + Math.PI * k / steps);
+      pts.push([h + sg * Math.sqrt(Math.max(0, rho * rho - u * u)), u]);
+    }
+    return pts;
+  };
+  for (let i = -(n - 1); i <= n - 1; i++) {
+    // verticals bend toward the top and bottom points
+    poly(arc(Rx * i / n, Ry).map(([p, q]) => [cx + p, cy + q]), ...sty(i, st.c3));
+    // horizontals bend toward the left and right points
+    if (!(i === 0 && st.showHorizon)) poly(arc(Ry * i / n, Rx).map(([p, q]) => [cx + q, cy + p]), ...sty(i, st.c2));
+  }
+  if (st.showHorizon) L(cx - Rx, cy, cx + Rx, cy, st.cH, w * 1.6, 1);
+  if (st.mode === 4) return;
+  // straight rays from the centre point
+  const nr = Math.round(st.rays);
+  for (let i = 0; i < nr; i++) {
+    const ang = i * 2 * Math.PI / nr, acc = accentOn(i);
+    L(cx, cy, cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, st.c1, acc ? w * 2 : w, acc ? Math.min(1, a + .25) : a);
+  }
+  if (st.showRim) {
+    const N = 180, pts = [];
+    for (let k = 0; k <= N; k++) pts.push([cx + Math.cos(k / N * 2 * Math.PI) * R, cy + Math.sin(k / N * 2 * Math.PI) * R]);
+    poly(pts, st.cH, w * 1.3, .9);
+  }
+}
+
+function build(W, H, clip) {
+  const out = [];
+  const w = +st.weight, a = +st.opacity, hy = st.hz * H, V = vps(W, H);
+  const L = (x1, y1, x2, y2, c, lw, al) => { const s = clipSeg(x1, y1, x2, y2, clip); if (s) out.push({ s, c, w: lw, a: al }); };
+  const accentOn = i => st.accent > 0 && i % st.accent === 0;
+  const poly = (pts, c, lw, al) => { for (let i = 1; i < pts.length; i++) L(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], c, lw, al); };
+  if (st.mode === 6) { buildIso(W, H, clip, L, accentOn, w, a); return out; }
+  if (st.mode === 4 || st.mode === 5) {
+    buildFish(W, H, clip, L, accentOn, w, a, poly);
+    if (st.showMarks) {
+      const m = 0.014 * Math.max(W, H);
+      for (const v of V.filter(v => !v.guide)) { L(v.x - m, v.y, v.x + m, v.y, v.c, w * 1.8, 1); L(v.x, v.y - m, v.x, v.y + m, v.c, w * 1.8, 1); }
+    }
+    return out;
+  }
+
+  // Verticals (1- and 2-point)
+  if (st.mode !== 3 && st.verticals > 0) {
+    for (let i = 1; i < st.verticals; i++) {
+      const x = W * i / st.verticals, acc = accentOn(i);
+      L(x, clip.y0, x, clip.y1, st.c3, acc ? w * 2 : w, acc ? Math.min(1, a + .25) : a);
+    }
+  }
+  // Horizontals (1-point)
+  if (st.mode === 1 && st.horizontals > 0) {
+    const n = st.horizontals, ys = [];
+    if (st.floor) {
+      const k = 0.35;
+      if (hy < H) for (let i = 1; i <= n; i++) ys.push([hy + (H - hy) / (1 + i * k), i]);
+      if (hy > 0) for (let i = 1; i <= n; i++) ys.push([hy - hy / (1 + i * k), i]);
+    } else for (let i = 1; i < n; i++) ys.push([H * i / n, i]);
+    for (const [y, i] of ys) { const acc = accentOn(i); L(clip.x0, y, clip.x1, y, st.c2, acc ? w * 2 : w, acc ? Math.min(1, a + .25) : a); }
+  }
+  // Rays from each vanishing point
+  const corners = [[clip.x0, clip.y0], [clip.x1, clip.y0], [clip.x0, clip.y1], [clip.x1, clip.y1]];
+  for (const v of V) {
+    const far = Math.max(...corners.map(([x, y]) => Math.hypot(x - v.x, y - v.y))) + 10;
+    rayAngles(v, W, H, Math.round(st.rays)).forEach((ang, i) => {
+      const acc = accentOn(i);
+      L(v.x, v.y, v.x + Math.cos(ang) * far, v.y + Math.sin(ang) * far, v.c, acc ? w * 2 : w, acc ? Math.min(1, a + .25) : a);
+    });
+  }
+  // Horizon
+  if (st.showHorizon) L(clip.x0, hy, clip.x1, hy, st.cH, w * 1.6, 1);
+  // Cone of vision (drawn as a dashed circle from short segments)
+  if (st.showCone && st.mode !== 1) {
+    const c = cone(W, H);
+    if (c) {
+      const N = 144;
+      for (let i = 0; i < N; i += 2) {
+        const t0 = i / N * 2 * Math.PI, t1 = (i + 1) / N * 2 * Math.PI;
+        L(c.cx + Math.cos(t0) * c.r, c.cy + Math.sin(t0) * c.r, c.cx + Math.cos(t1) * c.r, c.cy + Math.sin(t1) * c.r, st.cH, w * 1.3, .9);
+      }
+      const m = 0.008 * Math.max(W, H);
+      L(c.cx - m, c.cy, c.cx + m, c.cy, st.cH, w * 1.3, .9); L(c.cx, c.cy - m, c.cx, c.cy + m, st.cH, w * 1.3, .9);
+    }
+  }
+  // VP marks
+  if (st.showMarks) {
+    const m = 0.014 * Math.max(W, H);
+    for (const v of V) { L(v.x - m, v.y, v.x + m, v.y, v.c, w * 1.8, 1); L(v.x, v.y - m, v.x, v.y + m, v.c, w * 1.8, 1); }
+  }
+  return out;
+}
+function drawPrims(ctx, P, minW, alphaMul) {
+  ctx.lineCap = 'round';
+  for (const p of P) {
+    ctx.strokeStyle = p.c; ctx.globalAlpha = p.a * alphaMul; ctx.lineWidth = Math.max(p.w, minW);
+    ctx.beginPath(); ctx.moveTo(p.s[0], p.s[1]); ctx.lineTo(p.s[2], p.s[3]); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---------- Board (preview) ---------- */
+const cv = $('#board'), ctx = cv.getContext('2d');
+let view = { s: 0.1, cx: 0, cy: 0 }, cssW = 0, cssH = 0, dpr = 1, tokens = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  ['--stage', '--stage-dot', '--ink', '--muted', '--panel', '--paper-shadow', '--accent'].forEach(k => tokens[k] = cs.getPropertyValue(k).trim());
+}
+function resize() {
+  const r = cv.getBoundingClientRect(); dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cssW = r.width; cssH = r.height; cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+  draw();
+}
+function fitAll() {
+  const { W, H } = size();
+  let x0 = 0, y0 = 0, x1 = W, y1 = H;
+  for (const v of vps(W, H)) {
+    const x = clamp(v.x, -1.6 * W, 2.6 * W), y = clamp(v.y, -1.6 * H, 2.6 * H);
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  const pad = 56;
+  view.s = Math.min((cssW - pad * 2) / (x1 - x0), (cssH - pad * 2 - 30) / (y1 - y0));
+  view.cx = (x0 + x1) / 2; view.cy = (y0 + y1) / 2 + 12 / view.s;
+  draw();
+}
+const toScreen = (x, y) => [cssW / 2 + (x - view.cx) * view.s, cssH / 2 + (y - view.cy) * view.s];
+const toPaper = (sx, sy) => [(sx - cssW / 2) / view.s + view.cx, (sy - cssH / 2) / view.s + view.cy];
+
+let checker;
+function checkerPattern() {
+  if (checker) return checker;
+  const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d');
+  g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, 16, 16); g.fillStyle = '#D5DAE0'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8);
+  return checker = ctx.createPattern(c, 'repeat');
+}
+let raf = 0;
+function draw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
+function handlePositions(W, H) {
+  return vps(W, H).map(v => {
+    let [sx, sy] = toScreen(v.x, v.y); const m = 22;
+    const off = sx < m || sy < m || sx > cssW - m || sy > cssH - m;
+    if (off) { sx = clamp(sx, m, cssW - m); sy = clamp(sy, m, cssH - m); }
+    return { ...v, sx, sy, off };
+  });
+}
+function render() {
+  if (!cssW) return;
+  const { W, H } = size();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = tokens['--stage']; ctx.fillRect(0, 0, cssW, cssH);
+  // dot grid on the board
+  ctx.fillStyle = tokens['--stage-dot'];
+  for (let x = 12; x < cssW; x += 24) for (let y = 12; y < cssH; y += 24) ctx.fillRect(x, y, 1.5, 1.5);
+
+  const [vx0, vy0] = toPaper(0, 0), [vx1, vy1] = toPaper(cssW, cssH);
+  const viewClip = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 }, paper = { x0: 0, y0: 0, x1: W, y1: H };
+  const minW = 0.7 / view.s;
+
+  ctx.save();
+  ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * (cssW / 2 - view.cx * view.s), dpr * (cssH / 2 - view.cy * view.s));
+  // faint construction lines beyond the page
+  drawPrims(ctx, build(W, H, viewClip), minW, 0.22);
+  // page
+  ctx.shadowColor = tokens['--paper-shadow']; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = BG[st.bg] || checkerPattern();
+  if (!BG[st.bg]) { ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const [px, py] = toScreen(0, 0); ctx.shadowColor = tokens['--paper-shadow']; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4; ctx.fillRect(px, py, W * view.s, H * view.s); ctx.restore(); }
+  else ctx.fillRect(0, 0, W, H);
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+  drawPrims(ctx, build(W, H, paper), minW, 1);
+  ctx.restore();
+
+  // handles
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace'; ctx.textBaseline = 'middle';
+  for (const h of handlePositions(W, H)) {
+    const active = drag && drag.key === h.k;
+    ctx.beginPath(); ctx.arc(h.sx, h.sy, active ? 10 : 8, 0, Math.PI * 2);
+    ctx.fillStyle = h.off ? tokens['--panel'] : h.c; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = h.off ? h.c : tokens['--panel']; ctx.stroke();
+    if (!h.off) { ctx.lineWidth = 1; ctx.strokeStyle = h.c; ctx.beginPath(); ctx.arc(h.sx, h.sy, active ? 12 : 10, 0, Math.PI * 2); ctx.stroke(); }
+    const label = h.n;
+    const tw = ctx.measureText(label).width;
+    let lx = h.sx + 14; if (lx + tw + 10 > cssW) lx = h.sx - 14 - tw - 10;
+    ctx.fillStyle = tokens['--panel']; ctx.globalAlpha = .92; ctx.fillRect(lx, h.sy - 9, tw + 10, 18); ctx.globalAlpha = 1;
+    ctx.fillStyle = tokens['--ink']; ctx.fillText(label, lx + 5, h.sy);
+  }
+  updateReadout(W, H);
+}
+
+/* ---------- Readout ---------- */
+function updateReadout(W, H) {
+  const { mm } = size();
+  const parts = [];
+  parts.push(`<span><b>${NAMES[st.preset]}</b> ${W.toLocaleString()} × ${H.toLocaleString()} px${mm ? ` · ${st.dpi} dpi` : ''}</span>`);
+  const len = px => mm ? `${(px / st.dpi * 25.4).toFixed(1)} mm` : `${Math.round(px).toLocaleString()} px`;
+  if (st.mode === 6) {
+    const { s, v } = isoStep(W);
+    parts.push(`<span>Cell <b>${len(s)}</b> wide · <b>${len(v)}</b> tall</span>`);
+    parts.push(`<span>Angle <b>${(+st.isoAngle).toFixed(st.isoAngle == 30 ? 0 : 2)}°</b></span>`);
+    $('#readout').innerHTML = parts.join(''); return;
+  }
+  parts.push(`<span>Horizon <b>${Math.round(st.hz * 100)}%</b> down</span>`);
+  if (st.mode === 4) {
+    const f = fish(W, H);
+    parts.push(`<span>Left to right <b>${len(f.Rx * 2)}</b></span>`, `<span>Top to bottom <b>${len(f.Ry * 2)}</b></span>`);
+    $('#readout').innerHTML = parts.join(''); return;
+  }
+  if (st.mode === 5) {
+    parts.push(`<span>180° circle <b>${len(fish(W, H).R * 2)}</b> across</span>`);
+    $('#readout').innerHTML = parts.join(''); return;
+  }
+  const c = cone(W, H);
+  if (st.mode !== 1) {
+    if (c) {
+      const dist = mm ? `${Math.round(c.d / st.dpi * 25.4).toLocaleString()} mm` : `${Math.round(c.d).toLocaleString()} px`;
+      parts.push(`<span>Viewing distance <b>${dist}</b></span>`);
+    } else if (st.mode === 3) parts.push(`<span>VP3 is too close to the horizon for a true 3-point view</span>`);
+  }
+  $('#readout').innerHTML = parts.join('');
+}
+
+/* ---------- Pointer interaction ---------- */
+let drag = null;
+function pt(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+function hit(sx, sy) {
+  const { W, H } = size();
+  let best = null, bd = 18;
+  for (const h of handlePositions(W, H)) { const d = Math.hypot(h.sx - sx, h.sy - sy); if (d < bd) { bd = d; best = h.k; } }
+  if (best) return best;
+  if (st.mode !== 6 && Math.abs(toScreen(0, st.hz * H)[1] - sy) < 8) return 'hz';
+  return null;
+}
+cv.addEventListener('pointerdown', e => {
+  const [sx, sy] = pt(e); const k = hit(sx, sy);
+  drag = { key: k || 'pan', lx: sx, ly: sy };
+  cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); draw();
+});
+cv.addEventListener('pointermove', e => {
+  const [sx, sy] = pt(e);
+  if (!drag) { const k = hit(sx, sy); cv.style.cursor = k === 'hz' ? 'ns-resize' : k ? 'move' : ''; return; }
+  const { W, H } = size(); const [px, py] = toPaper(sx, sy);
+  const nx = clamp(px / W, -4, 5), ny = clamp(py / H, -4, 5);
+  switch (drag.key) {
+    case 'pan': view.cx -= (sx - drag.lx) / view.s; view.cy -= (sy - drag.ly) / view.s; break;
+    case 'hz': st.hz = clamp(ny, -1, 2); break;
+    case 'vp0': case 'vp1': case 'vp2': st[drag.key] = nx; st.hz = clamp(ny, -1, 2); break;
+    case 'vp3': st.vp3x = nx; st.vp3y = ny; break;
+    case 'fc': st.fx = clamp(nx, -1, 2); st.hz = clamp(ny, -1, 2); break;
+    case 'fN': case 'fS': case 'fE': case 'fW': {
+      const f = fish(W, H), horiz = drag.key === 'fE' || drag.key === 'fW';
+      if (st.mode === 4) {
+        if (horiz) st.f4w = clamp(Math.abs(px - f.cx) / (W / 2), 0.1, 8);
+        else st.f4h = clamp(Math.abs(py - f.cy) / (H / 2), 0.1, 8);
+      } else st.fr = clamp(Math.hypot(px - f.cx, py - f.cy) / (Math.min(W, H) / 2), 0.1, 6);
+      break;
+    }
+  }
+  drag.lx = sx; drag.ly = sy; draw();
+  if (drag.key !== 'pan') syncInputs(true);
+});
+const endDrag = () => { if (!drag) return; drag = null; cv.classList.remove('dragging'); save(); syncInputs(); draw(); };
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const [sx, sy] = pt(e); const [px, py] = toPaper(sx, sy);
+  view.s = clamp(view.s * Math.exp(-e.deltaY * 0.0015), 0.005, 4);
+  view.cx = px - (sx - cssW / 2) / view.s; view.cy = py - (sy - cssH / 2) / view.s; draw();
+}, { passive: false });
+const zoomBy = f => { view.s = clamp(view.s * f, 0.005, 4); draw(); };
+$('#zIn').onclick = () => zoomBy(1.25); $('#zOut').onclick = () => zoomBy(0.8); $('#zFit').onclick = fitAll;
+
+/* ---------- Controls ---------- */
+const fmt = {
+  hz: v => Math.round(v * 100) + '%', opacity: v => Math.round(v * 100) + '%',
+  weight: v => (+v).toFixed(1) + ' px', accent: v => (+v ? 'every ' + v + ' lines' : 'off'),
+  rays: v => v, verticals: v => (+v ? v : 'off'), horizontals: v => (+v ? v : 'off'),
+  fr: v => Math.round(v * 100) + '%', curves: v => v, cells: v => v,
+  f4w: v => Math.round(v * 100) + '% of width', f4h: v => Math.round(v * 100) + '% of height'
+};
+function syncInputs(onlyPositions) {
+  $$('[data-bind]').forEach(el => {
+    const k = el.dataset.bind; if (onlyPositions && !/^(hz|vp|fx|fr|f4)/.test(k)) return;
+    if (document.activeElement === el && el.type === 'number') return;
+    let v = st[k];
+    if (el.type === 'checkbox') el.checked = !!v;
+    else if ('pct' in el.dataset) el.value = Math.round(v * 1000) / 10;
+    else el.value = v;
+  });
+  $$('output[data-for]').forEach(o => { const k = o.dataset.for; o.textContent = fmt[k] ? fmt[k](st[k]) : st[k]; });
+  if (onlyPositions) return;
+  $('#mode' + st.mode).checked = true;
+  $(st.orient === 'landscape' ? '#orL' : '#orP').checked = true;
+  ({ white: $('#bgWhite'), paper: $('#bgPaper'), slate: $('#bgSlate'), clear: $('#bgClear') })[st.bg].checked = true;
+  $$('[data-modes]').forEach(el => el.hidden = !el.dataset.modes.split(',').includes(String(st.mode)));
+  $$('[data-print]').forEach(el => el.hidden = !PRINT[st.preset]);
+  $$('[data-custom]').forEach(el => el.hidden = st.preset !== 'custom');
+  const labs = { 1: ['Rays', 'Horizontals', 'Verticals'], 2: ['VP1', 'VP2', 'Verticals'], 3: ['VP1', 'VP2', 'VP3'], 4: ['', 'Horizontals', 'Verticals'], 5: ['Centre', 'Horizontals', 'Verticals'], 6: ['Rising', 'Falling', 'Verticals'] }[st.mode];
+  ['c1', 'c2', 'c3'].forEach((k, i) => $('#lab-' + k).textContent = labs[i]);
+  $('#c2').closest('label').hidden = st.mode === 1 && !st.horizontals;
+  $('#cH').closest('label').hidden = st.mode === 6;
+  $('#c1').closest('label').hidden = st.mode === 4;
+  $('#hzLabel').textContent = st.mode >= 4 && st.mode <= 5 ? 'Horizon and centre height' : 'Horizon height';
+  $('#raysLabel').textContent = st.mode === 5 ? 'Straight lines from the centre' : 'Lines per vanishing point';
+  $(st.isoAngle == 30 ? '#iso30' : '#iso26').checked = true;
+  $('#modeHint').textContent = {
+    1: 'One point on the horizon. Good for corridors, roads and rooms seen face-on.',
+    2: 'Two points on the horizon, verticals stay upright. The everyday choice for buildings and objects seen from a corner.',
+    3: 'Adds a third point for verticals. Put it below the page for a bird\'s-eye view, above it for a worm\'s-eye view.',
+    4: 'Curvilinear with no centre point. Horizontals bend toward left and right points on the horizon, verticals toward points above and below. Good for wide panoramas and tall, looming scenes. Drag any point to stretch the grid.',
+    5: 'Curvilinear fisheye. Straight edges bend toward four points on a 180° circle, with a fifth point straight ahead. Drag the centre to move it, or an edge point to resize.',
+    6: 'Parallel projection with no vanishing points. Used for technical drawings, maps, and isometric games.'
+  }[st.mode];
+  $$('#palettes .chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.p === st.palette)));
+}
+$$('[data-bind]').forEach(el => {
+  el.addEventListener('input', () => {
+    const k = el.dataset.bind; let v;
+    if (el.type === 'checkbox') v = el.checked;
+    else if ('str' in el.dataset || el.type === 'color' || k === 'preset') v = el.value;
+    else { v = parseFloat(el.value); if (!isFinite(v)) return; if ('pct' in el.dataset) v /= 100; }
+    if (['vp0', 'vp1', 'vp2', 'vp3x', 'vp3y'].includes(k)) v = clamp(v, -4, 5);
+    st[k] = v;
+    if (/^c[123H]$/.test(k)) st.palette = 'custom';
+    const resized = ['preset', 'dpi', 'cw', 'ch'].includes(k);
+    if (k === 'preset' && SCREEN[v]) { const [w, h] = SCREEN[v]; if (w !== h) st.orient = w > h ? 'landscape' : 'portrait'; }
+    save(); syncInputs(); if (resized && k !== 'dpi') fitAll(); else draw();
+  });
+});
+$$('input[name=mode]').forEach(r => r.addEventListener('change', () => { st.mode = +r.value; save(); syncInputs(); fitAll(); }));
+$$('input[name=isoAngle]').forEach(r => r.addEventListener('change', () => { st.isoAngle = +r.value; save(); syncInputs(); draw(); }));
+$$('input[name=orient]').forEach(r => r.addEventListener('change', () => { st.orient = r.value; save(); syncInputs(); fitAll(); }));
+$$('input[name=bg]').forEach(r => r.addEventListener('change', () => {
+  st.bg = r.value;
+  if (st.bg === 'slate' && st.palette !== 'chalk' && st.palette !== 'custom') applyPalette('chalk');
+  else if (st.bg !== 'slate' && st.palette === 'chalk') applyPalette('tri');
+  save(); syncInputs(); draw();
+}));
+function applyPalette(p) { Object.assign(st, { palette: p }, PALETTES[p]); delete st.label; }
+const pal = $('#palettes');
+for (const [k, p] of Object.entries(PALETTES)) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.p = k;
+  b.innerHTML = `<i>${[p.c1, p.c2, p.c3].map(c => `<b style="background:${c}"></b>`).join('')}</i>${p.label}`;
+  b.onclick = () => { applyPalette(k); save(); syncInputs(); draw(); };
+  pal.appendChild(b);
+}
+$('#reset').onclick = () => { st = Object.assign({}, DEF); save(); syncInputs(); fitAll(); toast('Settings reset'); };
+
+/* ---------- Export ---------- */
+let downloads = null;
+(async () => { try { if (window.claude && window.claude.use) downloads = await window.claude.use('downloads'); } catch (e) {} })();
+const tEl = $('#toast'); let tT;
+function toast(msg) { tEl.textContent = msg; tEl.classList.add('show'); clearTimeout(tT); tT = setTimeout(() => tEl.classList.remove('show'), 2600); }
+function fileBase() {
+  const { W, H } = size();
+  const n = (st.name || 'perspective-grid').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-') || 'perspective-grid';
+  const kind = st.mode === 6 ? (st.isoAngle == 30 ? 'isometric' : 'iso-2to1') : st.mode === 5 ? '5pt-fisheye' : st.mode === 4 ? '4pt-curvilinear' : st.mode + 'pt';
+  return `${n}-${kind}-${W}x${H}`;
+}
+async function deliver(filename, blob) {
+  if (downloads) {
+    try { await downloads.save({ filename, data: blob }); toast('Saved ' + filename); }
+    catch (e) {
+      const m = { declined: 'Download cancelled', rate_limited: 'A save is already waiting for your answer', too_large: 'That file is too large. Try a lower dpi.' }[e && e.code];
+      toast(m || 'Downloads are not available here');
+    }
+    return;
+  }
+  try {
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000); toast('Saved ' + filename);
+  } catch (e) { toast('Downloads are not available here'); }
+}
+function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+async function busy(btn, fn) {
+  const all = $$('.exports .btn'); all.forEach(b => b.disabled = true);
+  try { await new Promise(r => setTimeout(r, 30)); await fn(); }
+  catch (e) { console.error(e); toast('Could not build the file. Try a smaller size.'); }
+  finally { all.forEach(b => b.disabled = false); }
+}
+$('#exPng').onclick = () => busy(this, async () => {
+  const { W, H } = size();
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  if (BG[st.bg]) { g.fillStyle = BG[st.bg]; g.fillRect(0, 0, W, H); }
+  drawPrims(g, build(W, H, { x0: 0, y0: 0, x1: W, y1: H }), 0, 1);
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  if (!blob) throw new Error('png');
+  await deliver(fileBase() + '.png', blob);
+});
+$('#exSvg').onclick = () => busy(this, async () => {
+  const { W, H, mm } = size();
+  const r2 = n => Math.round(n * 100) / 100;
+  const P = build(W, H, { x0: 0, y0: 0, x1: W, y1: H });
+  const dims = mm ? `width="${r2(mm[0])}mm" height="${r2(mm[1])}mm"` : `width="${W}" height="${H}"`;
+  let s = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" ${dims} viewBox="0 0 ${W} ${H}">\n`;
+  if (BG[st.bg]) s += `<rect width="${W}" height="${H}" fill="${BG[st.bg]}"/>\n`;
+  s += `<g fill="none" stroke-linecap="round">\n`;
+  for (const p of P) s += `<line x1="${r2(p.s[0])}" y1="${r2(p.s[1])}" x2="${r2(p.s[2])}" y2="${r2(p.s[3])}" stroke="${p.c}" stroke-width="${r2(p.w)}" stroke-opacity="${r2(p.a)}"/>\n`;
+  s += `</g>\n</svg>\n`;
+  await deliver(fileBase() + '.svg', new Blob([s], { type: 'image/svg+xml' }));
+});
+$('#exPdf').onclick = () => busy(this, async () => {
+  if (!window.jspdf) { toast('The PDF tool did not load. PNG and SVG still work.'); return; }
+  const { W, H, mm } = size();
+  const unit = mm ? 'mm' : 'pt';
+  const pw = mm ? mm[0] : W * 0.75, ph = mm ? mm[1] : H * 0.75, k = pw / W;
+  const doc = new window.jspdf.jsPDF({ unit, format: [pw, ph], orientation: pw > ph ? 'landscape' : 'portrait', compress: true });
+  if (BG[st.bg]) { doc.setFillColor(...hexRgb(BG[st.bg])); doc.rect(0, 0, pw, ph, 'F'); }
+  doc.setLineCap('round');
+  const gs = {}; let lastA = null, lastC = null, lastW = null;
+  for (const p of build(W, H, { x0: 0, y0: 0, x1: W, y1: H })) {
+    const a = Math.round(p.a * 100) / 100;
+    if (a !== lastA) { gs[a] = gs[a] || new doc.GState({ 'stroke-opacity': a }); doc.setGState(gs[a]); lastA = a; }
+    if (p.c !== lastC) { doc.setDrawColor(...hexRgb(p.c)); lastC = p.c; }
+    if (p.w !== lastW) { doc.setLineWidth(p.w * k); lastW = p.w; }
+    doc.line(p.s[0] * k, p.s[1] * k, p.s[2] * k, p.s[3] * k);
+  }
+  await deliver(fileBase() + '.pdf', doc.output('blob'));
+});
+
+/* ---------- Boot ---------- */
+readTokens();
+const mq = window.matchMedia('(prefers-color-scheme: dark)');
+(mq.addEventListener ? mq.addEventListener('change', () => { readTokens(); draw(); }) : null);
+new MutationObserver(() => { readTokens(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+syncInputs();
+let first = true;
+new ResizeObserver(() => { resize(); if (first && cssW) { first = false; fitAll(); } }).observe(cv);
+})();
+</script>
+</body>
+</html>
